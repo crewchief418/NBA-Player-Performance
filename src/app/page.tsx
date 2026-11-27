@@ -180,7 +180,7 @@ export default function Home() {
             <span className="at-symbol">@</span>
             <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span></div></div>
           </div>
-          <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span></div>
+          <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span>{game.players.some(p=>p.injury_designator) && <small className="game-injury-count">{game.players.filter(p=>p.injury_designator).length} INJURY TAGS</small>}</div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
         {expandedGames[game.gameId] && <div className="player-list">{game.players.some(p=>p.injury_designator) && <div className="game-injury-report"><div className="game-injury-title">INJURY REPORT <span>{game.players.filter(p=>p.injury_designator).length} LISTED</span></div><div className="game-injury-items">{game.players.filter(p=>p.injury_designator).sort((a,b)=>String(a.injury_designator).localeCompare(String(b.injury_designator)) || a.full_name.localeCompare(b.full_name)).map(p=><span key={p.player_id}><b className={`injury-tag injury-${p.injury_designator?.toLowerCase()}`}>{p.injury_designator}</b>{p.full_name} <small>{p.injury_status}</small></span>)}</div></div>} {game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>}
