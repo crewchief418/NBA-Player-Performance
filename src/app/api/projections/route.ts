@@ -166,7 +166,7 @@ export async function GET() {
           ht.abbreviation home_team,at.abbreviation away_team,
           (p.metadata->>'roster_team'=ht.abbreviation) is_home,
           CASE WHEN p.metadata->>'roster_team'=ht.abbreviation THEN lg.away_team_id ELSE lg.home_team_id END opponent_team_id,
-          p.metadata->>'roster_team' roster_team,r.*,
+          p.metadata->>'roster_team' roster_team,p.metadata->>'depth_chart_rank' depth_chart_rank,p.metadata->>'depth_chart_position' depth_chart_position,r.*,
           coalesce(i.status,'') injury_status,coalesce(i.injury,'') injury_detail,
           coalesce(tm.missing_minutes,0) missing_minutes,coalesce(tr.active_minutes,0) active_rotation_minutes,
           coalesce(pa.possessions,lp.possessions) home_pace,
@@ -194,6 +194,7 @@ export async function GET() {
             (coalesce(0.65*recent_minutes+0.35*season_minutes,recent_minutes)
               + greatest(-3,least(3,coalesce((last3_minutes-recent_minutes)*0.25,0)))
               + CASE WHEN starter_rate>=0.60 THEN 0.5 ELSE 0 END
+              + CASE WHEN depth_chart_rank='1' THEN 1.0 WHEN depth_chart_rank='2' THEN 0.3 ELSE 0 END
               + CASE WHEN rest_days<=1 THEN -1.2 WHEN rest_days>=3 THEN 0.3 ELSE 0 END
               + CASE WHEN recent_minutes>=36 THEN -0.6 ELSE 0 END
               + CASE WHEN active_rotation_minutes>0 THEN least(3,missing_minutes*0.50*recent_minutes/active_rotation_minutes) ELSE 0 END
@@ -236,11 +237,11 @@ export async function GET() {
         round((0.80*(baseline_points+baseline_rebounds)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(r_rate*expected_minutes/36*r_def*r_venue*pace_factor)))::numeric,1) pr,
         round((0.80*(baseline_points+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) pa,
         round((0.80*(baseline_rebounds+baseline_assists)+0.20*((r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) ra,
-        round((starter_rate*100)::numeric,0) starter_probability,
+        round((greatest(starter_rate,CASE WHEN depth_chart_rank='1' THEN 0.75 WHEN depth_chart_rank='2' THEN 0.45 ELSE 0 END)*100)::numeric,0) starter_probability,
         injury_status,injury_detail,rest_days,
         jsonb_build_object('sample_size',sample_size,'weighted_recent_per36',jsonb_build_object('points',p_rate,'rebounds',r_rate,'assists',a_rate,'threes',t_rate,'steals',s_rate,'blocks',b_rate),
           'opponent_defense',jsonb_build_object('points',p_def,'rebounds',r_def,'assists',a_def,'threes',t_def,'steals',s_def,'blocks',b_def),
-          'pace_factor',pace_factor,'home_away',is_home,'rest_days',rest_days,'starter_rate',starter_rate,
+          'pace_factor',pace_factor,'home_away',is_home,'rest_days',rest_days,'starter_rate',starter_rate,'depth_chart_rank',depth_chart_rank,'depth_chart_position',depth_chart_position,
           'injury_status',injury_status,'teammate_missing_minutes',missing_minutes) feature_snapshot
       FROM projected ORDER BY game_date,scheduled_start,full_name LIMIT 1200
     `);
