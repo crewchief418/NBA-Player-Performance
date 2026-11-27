@@ -91,7 +91,7 @@ export default function Home() {
   const [selectedDate,setSelectedDate] = useState("all");
   const [modelMenuOpen,setModelMenuOpen] = useState(false);
   const [expandedGames,setExpandedGames] = useState<Record<number,boolean>>({});
-  const [installPrompt,setInstallPrompt] = useState<any>(null);
+  const [installPrompt,setInstallPrompt] = useState<any>(null);\n  const [refreshingInjuries,setRefreshingInjuries] = useState(false);\n  const [injuryRefreshMessage,setInjuryRefreshMessage] = useState("");
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
@@ -135,6 +135,26 @@ export default function Home() {
 
     {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
       <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
+      <div className="manual-injury-refresh">
+        <div><strong>LIVE PLAYER AVAILABILITY</strong><span>Pull the latest ESPN injury report and depth charts now.</span></div>
+        <button type="button" disabled={refreshingInjuries} onClick={async()=>{
+          setRefreshingInjuries(true);setInjuryRefreshMessage("");
+          try {
+            const response=await fetch("/api/injuries/refresh",{method:"POST"});
+            const result=await response.json();
+            if(!response.ok) throw new Error(result.error || "Injury refresh failed");
+            const [nextModel,nextProjections]=await Promise.all([
+              fetch("/api/model").then(r=>r.json()),
+              fetch("/api/projections").then(r=>r.json())
+            ]);
+            setModel(nextModel);setRows(nextProjections.projections ?? []);
+            setInjuryRefreshMessage(`Updated: ${result.injury_rows} injury records · ${result.depth_chart_entries} depth-chart entries${result.failures?.length ? " · Some sources unavailable" : ""}`);
+          } catch(error) {
+            setInjuryRefreshMessage(error instanceof Error ? error.message : "Injury refresh failed");
+          } finally { setRefreshingInjuries(false); }
+        }}>{refreshingInjuries ? "UPDATING…" : "UPDATE INJURIES"}</button>
+        {injuryRefreshMessage && <p role="status">{injuryRefreshMessage}</p>}
+      </div>
       <details className="model-lab" open>
         <summary><span>MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>
         <div className="model-lab-content">
