@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type Status = { connected: boolean; counts?: Record<string, number>; error?: string };\ntype ModelDiagnostics = { model?: {version:string}; backtest?: {method:string;metrics:Array<{stat:string;sample_size:number;baseline_mae:string;model_mae:string;model_bias:string;improvement_pct:string}>}; data?: {injury_rows:number;injured_players:number;saved_projection_rows:number;injury_history_available:boolean}; features?: Array<{name:string;status:string;detail:string}> };
+type Status = { connected: boolean; counts?: Record<string, number>; error?: string };
+type ModelDiagnostics = { model?: {version:string}; backtest?: {method:string;metrics:Array<{stat:string;sample_size:number;baseline_mae:string;model_mae:string;model_bias:string;improvement_pct:string}>}; data?: {injury_rows:number;injured_players:number;saved_projection_rows:number;injury_history_available:boolean}; features?: Array<{name:string;status:string;detail:string}> };
 type Projection = {
   player_id: number; game_id: number; espn_id?: string | null; full_name: string;
   position: string | null; game_date: string; scheduled_start?: string | null;
@@ -75,13 +76,15 @@ function PlayerCard({player}:{player:Projection}) {
       <div className="detail-heading"><span>RECENT FORM BASELINE</span><b>{player.sample_size} GAME SAMPLE</b></div>
       <div className="stat-grid">{stats.map(([key,label])=><div className="stat-tile" key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
       <div className="combo-row">{combos.map(([key,label])=><div key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
-      <div className="player-context"><span>PROJECTED MINUTES <b>{player.avg_minutes}</b></span><span>STARTER RATE <b>{player.starter_probability ?? "—"}%</b></span><span>REST <b>{player.rest_days == null ? "—" : `${player.rest_days}D`}</b></span>{player.injury_status && <span>AVAILABILITY <b>{player.injury_status}</b></span>}</div>\n      <p className="detail-note">Minutes-first forecast using recency-weighted production, current-season form, opponent defense, estimated pace, venue splits and rest. Current ESPN availability reports are applied when available.</p>
+      <div className="player-context"><span>PROJECTED MINUTES <b>{player.avg_minutes}</b></span><span>STARTER RATE <b>{player.starter_probability ?? "—"}%</b></span><span>REST <b>{player.rest_days == null ? "—" : `${player.rest_days}D`}</b></span>{player.injury_status && <span>AVAILABILITY <b>{player.injury_status}</b></span>}</div>
+      <p className="detail-note">Minutes-first forecast using recency-weighted production, current-season form, opponent defense, estimated pace, venue splits and rest. Current ESPN availability reports are applied when available.</p>
     </div>}
   </article>;
 }
 
 export default function Home() {
-  const [status,setStatus] = useState<Status | null>(null);\n  const [model,setModel] = useState<ModelDiagnostics | null>(null);
+  const [status,setStatus] = useState<Status | null>(null);
+  const [model,setModel] = useState<ModelDiagnostics | null>(null);
   const [rows,setRows] = useState<Projection[]>([]);
   const [loading,setLoading] = useState(true);
   const [search,setSearch] = useState("");
@@ -156,6 +159,18 @@ export default function Home() {
       </section>)}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
-    <section className="model-lab-section" id="model-lab">\n      <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model lab</h2><p>Accuracy checks and modeling inputs, kept out of the way of the daily board.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>\n      <details className="model-lab">\n        <summary><span>OPEN MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>\n        <div className="model-lab-content">\n          <div className="feature-grid">{(model?.features ?? []).map(feature=><div className="feature-item" key={feature.name}><div><strong>{feature.name}</strong><span className={feature.status==="active"?"feature-active":"feature-waiting"}>{feature.status==="active"?"ACTIVE":"COLLECTING DATA"}</span></div><p>{feature.detail}</p></div>)}</div>\n          <div className="backtest-heading"><div><h3>Walk-forward backtest</h3><p>Lower MAE is better. Positive improvement means the model beat the old last-eight average.</p></div></div>\n          {model?.backtest?.metrics?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>STAT</th><th>GAMES</th><th>BASELINE MAE</th><th>MODEL MAE</th><th>CHANGE</th></tr></thead><tbody>{model.backtest.metrics.map(metric=><tr key={metric.stat}><td>{metric.stat.toUpperCase()}</td><td>{Number(metric.sample_size).toLocaleString()}</td><td>{metric.baseline_mae}</td><td>{metric.model_mae}</td><td className={Number(metric.improvement_pct)>=0?"positive-change":"negative-change"}>{Number(metric.improvement_pct)>0?"+":""}{metric.improvement_pct}%</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Backtest metrics will appear when the model diagnostics query completes.</p>}\n          <p className="backtest-method">{model?.backtest?.method ?? "Walk-forward validation uses only data from before each game."} Current injury reports: {model?.data?.injured_players ?? 0} players. Historical injury snapshots are not yet available, so injury and teammate-absence adjustments are excluded from historical backtest scores.</p>\n        </div>\n      </details>\n    </section>\n    <footer className="site-footer"><span>COURTSIDE <b>PLAYER PERFORMANCE MODEL</b></span><span>INDEPENDENT FORECASTS · BUILT ON PLAYER HISTORY</span></footer>
+    <section className="model-lab-section" id="model-lab">
+      <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model lab</h2><p>Accuracy checks and modeling inputs, kept out of the way of the daily board.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
+      <details className="model-lab">
+        <summary><span>OPEN MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>
+        <div className="model-lab-content">
+          <div className="feature-grid">{(model?.features ?? []).map(feature=><div className="feature-item" key={feature.name}><div><strong>{feature.name}</strong><span className={feature.status==="active"?"feature-active":"feature-waiting"}>{feature.status==="active"?"ACTIVE":"COLLECTING DATA"}</span></div><p>{feature.detail}</p></div>)}</div>
+          <div className="backtest-heading"><div><h3>Walk-forward backtest</h3><p>Lower MAE is better. Positive improvement means the model beat the old last-eight average.</p></div></div>
+          {model?.backtest?.metrics?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>STAT</th><th>GAMES</th><th>BASELINE MAE</th><th>MODEL MAE</th><th>CHANGE</th></tr></thead><tbody>{model.backtest.metrics.map(metric=><tr key={metric.stat}><td>{metric.stat.toUpperCase()}</td><td>{Number(metric.sample_size).toLocaleString()}</td><td>{metric.baseline_mae}</td><td>{metric.model_mae}</td><td className={Number(metric.improvement_pct)>=0?"positive-change":"negative-change"}>{Number(metric.improvement_pct)>0?"+":""}{metric.improvement_pct}%</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Backtest metrics will appear when the model diagnostics query completes.</p>}
+          <p className="backtest-method">{model?.backtest?.method ?? "Walk-forward validation uses only data from before each game."} Current injury reports: {model?.data?.injured_players ?? 0} players. Historical injury snapshots are not yet available, so injury and teammate-absence adjustments are excluded from historical backtest scores.</p>
+        </div>
+      </details>
+    </section>
+    <footer className="site-footer"><span>COURTSIDE <b>PLAYER PERFORMANCE MODEL</b></span><span>INDEPENDENT FORECASTS · BUILT ON PLAYER HISTORY</span></footer>
   </main>;
 }
