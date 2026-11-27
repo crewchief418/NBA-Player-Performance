@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "COURTSIDE — NBA Player Performance",
+  "short_name": "COURTSIDE",
+  "description": "Independent NBA player performance forecasts and model results.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#090d12",
+  "theme_color": "#090d12",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
