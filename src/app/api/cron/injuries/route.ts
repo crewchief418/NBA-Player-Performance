@@ -1,0 +1,87 @@
+import { NextRequest, NextResponse } from "next/server";
+import { pool } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+const ESPN_INJURIES = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries";
+
+function reportDate() {
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(new Date());
+}
+function normalizeStatus(value: unknown) {
+  const status=String(value ?? "QUESTIONABLE").toLowerCase();
+  if(status.includes("out")) return "OUT";
+  if(status.includes("doubt")) return "DOUBTFUL";
+  if(status.includes("question")) return "QUESTIONABLE";
+  if(status.includes("day")) return "DAY-TO-DAY";
+  if(status.includes("prob")) return "PROBABLE";
+  return status.toUpperCase().replace(/[^A-Z -]/g,"").slice(0,40) || "QUESTIONABLE";
+}
+
+export async function GET(request: NextRequest) {
+  const secret=process.env.CRON_SECRET;
+  if(!secret || request.headers.get("authorization")!==`Bearer ${secret}`) {
+    return NextResponse.json({error:"Unauthorized"},{status:401});
+  }
+  const startedAt=new Date();
+  try {
+    const response=await fetch(ESPN_INJURIES,{
+      headers:{"User-Agent":"CourtsidePlayerModel/1.0"},
+      cache:"no-store",signal:AbortSignal.timeout(20000)
+    });
+    if(!response.ok) throw new Error(`ESPN injuries returned HTTP ${response.status}`);
+    const payload:any=await response.json();
+    const teamEntries=Array.isArray(payload)?payload:(payload.injuries ?? []);
+    if(!Array.isArray(teamEntries) || teamEntries.length===0) {
+      throw new Error("ESPN injury feed returned an unexpected or empty response; existing reports were preserved.");
+    }
+    const teams=await pool.query("SELECT id,abbreviation FROM teams");
+    const teamIds=new Map<string,number>(teams.rows.map((t:any)=>[String(t.abbreviation),Number(t.id)]));
+    let saved=0,unmatched=0;
+    const date=reportDate();
+    for(const teamEntry of teamEntries) {
+      const teamAbbr=String(teamEntry.team?.abbreviation ?? teamEntry.abbreviation ?? "");
+      const teamId=teamIds.get(teamAbbr) ?? null;
+      const injuries=teamEntry.injuries ?? [];
+      for(const item of injuries) {
+        const athlete=item.athlete ?? item.player ?? {};
+        const espnId=String(athlete.id ?? athlete.uid ?? "").replace(/^.*?athlete[:/]/,"");
+        if(!espnId) { unmatched++; continue; }
+        const player=await pool.query(
+          "SELECT id FROM players WHERE provider='espn' AND provider_player_id=$1 LIMIT 1",
+          [espnId]
+        );
+        if(!player.rowCount) { unmatched++; continue; }
+        const status=normalizeStatus(item.status?.name ?? item.status);
+        const injury=String(item.type?.name ?? item.type?.description ?? item.details?.type ?? item.shortComment ?? item.longComment ?? "Undisclosed").slice(0,500);
+        const returnDate=item.details?.returnDate ?? item.expectedReturnDate ?? null;
+        await pool.query(
+          `INSERT INTO injury_reports(player_id,team_id,report_date,status,injury,expected_return,source,raw_report,captured_at)
+           VALUES($1,$2,$3,$4,$5,$6,'espn',$7::jsonb,now())
+           ON CONFLICT(player_id,report_date,source) DO UPDATE SET
+             team_id=EXCLUDED.team_id,status=EXCLUDED.status,injury=EXCLUDED.injury,
+             expected_return=EXCLUDED.expected_return,raw_report=EXCLUDED.raw_report,captured_at=now()`,
+          [Number(player.rows[0].id),teamId,date,status,injury,returnDate,JSON.stringify(item)]
+        );
+        saved++;
+      }
+    }
+    await pool.query(
+      `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,records_received,records_written,metadata)
+       VALUES('espn','nba_current_injury_reports',$1,now(),'completed',$2,$3,$4::jsonb)`,
+      [startedAt,saved+unmatched,saved,JSON.stringify({report_date:date,unmatched})]
+    );
+    return NextResponse.json({success:true,report_date:date,injury_reports:saved,unmatched_players:unmatched});
+  } catch(error) {
+    console.error("ESPN injury sync failed",error);
+    try {
+      await pool.query(
+        `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,error_message)
+         VALUES('espn','nba_current_injury_reports',$1,now(),'failed',$2)`,
+        [startedAt,error instanceof Error?error.message:String(error)]
+      );
+    } catch {}
+    return NextResponse.json({error:"Injury sync failed; existing reports were preserved."},{status:502});
+  }
+}
