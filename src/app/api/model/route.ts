@@ -161,7 +161,7 @@ export async function GET() {
     `);
     return NextResponse.json({
       model:{name:"COURTSIDE performance model",version:"2.0.0"},
-      backtest:{method:"Held-out walk-forward validation from 2025-26 onward: each game is predicted using only prior player appearances and the opponent's prior eight team games.",metrics:result.rows},
+      backtest:{method:"Held-out walk-forward adjustment check from 2025-26 onward: minutes, venue, pace and opponent-defense adjustments are compared with the last-eight baseline using only pregame history.",metrics:result.rows},
       data:{...coverage.rows[0],injury_history_available:false},
       savedForecasts:gradedForecasts.rows,
       features:[
