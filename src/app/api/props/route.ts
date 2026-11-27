@@ -104,6 +104,8 @@ export async function GET() {
         AND pl.captured_at>=now()-interval '72 hours'
         AND g.game_date>=CURRENT_DATE
         AND g.game_date<=CURRENT_DATE+3
+        AND coalesce(pl.raw_line->>'line_type','main')='main'
+        AND forecast.projected_mean>0
       ORDER BY abs(forecast.projected_mean-pl.line) DESC, pl.captured_at DESC
       LIMIT 300
     `);
