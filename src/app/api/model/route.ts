@@ -135,9 +135,9 @@ export async function GET() {
       )
       SELECT stat,count(*)::int sample_size,
         round(avg(abs(actual-baseline))::numeric,2) baseline_mae,
-        round(avg(abs(actual-prediction))::numeric,2) model_mae,
-        round(avg((actual-prediction))::numeric,2) model_bias,
-        round((100*(avg(abs(actual-baseline))-avg(abs(actual-prediction)))/nullif(avg(abs(actual-baseline)),0))::numeric,1) improvement_pct
+        round(avg(abs(actual-(0.80*baseline+0.20*prediction)))::numeric,2) model_mae,
+        round(avg((actual-(0.80*baseline+0.20*prediction)))::numeric,2) model_bias,
+        round((100*(avg(abs(actual-baseline))-avg(abs(actual-(0.80*baseline+0.20*prediction))))/nullif(avg(abs(actual-baseline)),0))::numeric,1) improvement_pct
       FROM all_stats GROUP BY stat ORDER BY CASE stat WHEN 'points' THEN 1 WHEN 'rebounds' THEN 2 WHEN 'assists' THEN 3 WHEN 'threes_made' THEN 4 WHEN 'steals' THEN 5 WHEN 'blocks' THEN 6 WHEN 'pra' THEN 7 WHEN 'pr' THEN 8 WHEN 'pa' THEN 9 ELSE 10 END
     `);
 
