@@ -109,12 +109,12 @@ async function mapLimit<T,U>(items: T[], limit: number, fn: (item:T)=>Promise<U>
 
 function normalizeInjuryStatus(value: unknown): string {
   const s = String(value ?? "").trim().toUpperCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
-  if (s.includes("OUT") || s.includes("INACTIVE") || s.includes("INJURED RESERVE") || s === "IR") return "OUT";
-  if (s.includes("DOUBTFUL")) return "DOUBTFUL";
-  if (s.includes("QUESTIONABLE")) return "QUESTIONABLE";
-  if (s.includes("DAY TO DAY") || s === "DTD") return "DAY-TO-DAY";
-  if (s.includes("PROBABLE")) return "PROBABLE";
-  if (s.includes("AVAILABLE") || s.includes("ACTIVE")) return "AVAILABLE";
+  if (/\b(OUT|INACTIVE|IR)\b|INJURED RESERVE/.test(s)) return "OUT";
+  if (/\bDOUBTFUL\b/.test(s)) return "DOUBTFUL";
+  if (/\bQUESTIONABLE\b/.test(s)) return "QUESTIONABLE";
+  if (/\bPROBABLE\b/.test(s)) return "PROBABLE";
+  if (/\bDAY TO DAY\b|\bDTD\b/.test(s)) return "DAY-TO-DAY";
+  if (/\bAVAILABLE\b|\bACTIVE\b/.test(s)) return "AVAILABLE";
   return s || "UNKNOWN";
 }
 
