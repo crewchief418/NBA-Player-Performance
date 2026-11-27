@@ -177,7 +177,7 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
         )?.href ?? "";
         const playerProviderId = String(athlete.id ?? String(playerHref).match(/\/id\/(\d+)/)?.[1] ?? "");
         if (!playerProviderId) { skippedMissingPlayerId++; continue; }
-        entries.push({playerProviderId,teamId,status:normalizeInjuryStatus(item.status ?? item.type?.name),
+        entries.push({playerProviderId,teamId,status:normalizeInjuryStatus(`${item.status ?? item.type?.name ?? ""} ${item.shortComment ?? item.longComment ?? item.details ?? item.detail ?? ""}`),
           injury:String(item.shortComment ?? item.longComment ?? item.details ?? item.detail ?? item.type?.description ?? item.type?.name ?? "Injury report"),
           raw:item});
       }
