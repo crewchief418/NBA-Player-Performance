@@ -143,8 +143,8 @@ export async function GET() {
 
     const coverage = await pool.query(`
       SELECT
-        (SELECT count(*)::int FROM injury_reports WHERE report_date>=CURRENT_DATE-1) injury_rows,
-        (SELECT count(DISTINCT player_id)::int FROM injury_reports WHERE report_date>=CURRENT_DATE-1) injured_players,
+        (SELECT count(*)::int FROM injury_reports WHERE report_date=CURRENT_DATE) injury_rows,
+        (SELECT count(DISTINCT player_id)::int FROM injury_reports WHERE report_date=CURRENT_DATE) injured_players,
         (SELECT count(*)::int FROM projections p JOIN model_versions m ON m.id=p.model_version_id WHERE m.model_key='courtside_player_performance') saved_projection_rows
     `);
     const gradedForecasts = await pool.query(`
