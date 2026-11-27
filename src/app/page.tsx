@@ -120,9 +120,8 @@ export default function Home() {
       setStatus(s);
       setRows(p.projections ?? []);
       fetch("/api/model").then(r=>r.json()).then(setModel).catch(()=>setModel(null));
-    }).catch(()=>setStatus({connected:false}))
+    }).catch(()=>setStatus({connected:false})).finally(()=>setLoading(false));
     fetch("/api/props").then(r=>r.json()).then(data=>setVegasLines(data.lines ?? [])).catch(()=>setVegasLines([]));
-      .finally(()=>setLoading(false));
   },[]);
 
   const filtered = useMemo(()=>rows.filter(r=>r.full_name.toLowerCase().includes(search.toLowerCase())),[rows,search]);
