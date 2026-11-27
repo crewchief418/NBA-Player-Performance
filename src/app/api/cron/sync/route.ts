@@ -577,3 +577,32 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error:"Nightly sync failed" }, { status:500 });
   }
 }
+
+
+export async function POST(request: NextRequest) {
+  // The app has no user sign-in. Limit manual refreshes server-side so the public
+  // button cannot repeatedly trigger a full ESPN/roster sync.
+  try {
+    const recent = await pool.query(
+      `SELECT started_at FROM ingestion_runs
+       WHERE provider='espn' AND dataset='nba_2026_27_nightly_sync'
+         AND started_at > now() - interval '10 minutes'
+       ORDER BY started_at DESC LIMIT 1`
+    );
+    if (recent.rowCount) {
+      return NextResponse.json({
+        error: "A data sync ran recently. Please wait up to 10 minutes before trying again."
+      }, { status:429 });
+    }
+    const secret = process.env.CRON_SECRET;
+    if (!secret) return NextResponse.json({error:"Server sync authorization is not configured."},{status:503});
+    const internalRequest = new NextRequest(request.url, {
+      method:"GET",
+      headers:{authorization:`Bearer ${secret}`}
+    });
+    return GET(internalRequest);
+  } catch (error) {
+    console.error("Manual game-results refresh failed",error);
+    return NextResponse.json({error:"Could not start the game-results update."},{status:500});
+  }
+}
