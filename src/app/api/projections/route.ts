@@ -210,7 +210,7 @@ export async function GET() {
               + CASE WHEN recent_minutes>=36 THEN -0.6 ELSE 0 END
               + CASE WHEN active_rotation_minutes>0 THEN least(3,missing_minutes*0.50*recent_minutes/active_rotation_minutes) ELSE 0 END
             ) * CASE WHEN injury_status='DOUBTFUL' THEN 0.65 WHEN injury_status='QUESTIONABLE' THEN 0.88 WHEN injury_status IN ('DAY-TO-DAY','DAY TO DAY') THEN 0.93 ELSE 1 END
-          ))) END expected_minutes,
+          )) END expected_minutes,
           greatest(0.94,least(1.06,((coalesce(home_pace,0)+coalesce(away_pace,0))/2)/nullif( (SELECT possessions FROM league_pace),0))) pace_factor
         FROM candidates
       ),
