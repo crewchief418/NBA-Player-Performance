@@ -76,3 +76,13 @@
 
 
 .game-injury-count{display:block;color:#e5ad62;font:8px 'DM Mono',monospace;letter-spacing:.5px;margin-top:4px}
+
+
+/* Manual injury refresh control */
+.manual-injury-refresh{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin:18px 0 22px;padding:15px 17px;border:1px solid #29372f;border-radius:12px;background:#101812}
+.manual-injury-refresh>div{display:grid;gap:5px}
+.manual-injury-refresh strong{font:600 11px 'DM Mono',monospace;letter-spacing:.09em;color:var(--lime)}
+.manual-injury-refresh span,.manual-injury-refresh p{font-size:12px;color:#9aa69e;margin:0}
+.manual-injury-refresh button{border:1px solid var(--lime);border-radius:8px;padding:11px 15px;background:var(--lime);color:#101510;font:700 11px 'DM Mono',monospace;letter-spacing:.06em;cursor:pointer}
+.manual-injury-refresh button:disabled{opacity:.55;cursor:wait}
+.manual-injury-refresh p{flex-basis:100%;color:#c6d2c9}
