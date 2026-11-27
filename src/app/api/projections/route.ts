@@ -227,7 +227,7 @@ export async function GET() {
         FROM minutes_calc
       )
       SELECT player_id,full_name,position,espn_id,game_id,game_date,scheduled_start,home_team,away_team,
-        sample_size,round(expected_minutes::numeric,1) avg_minutes,
+        roster_team,sample_size,round(expected_minutes::numeric,1) avg_minutes,
         round((0.80*baseline_points+0.20*(p_rate*expected_minutes/36*p_def*p_venue*pace_factor))::numeric,1) points,
         round((0.80*baseline_rebounds+0.20*(r_rate*expected_minutes/36*r_def*r_venue*pace_factor))::numeric,1) rebounds,
         round((0.80*baseline_assists+0.20*(a_rate*expected_minutes/36*a_def*a_venue*pace_factor))::numeric,1) assists,
