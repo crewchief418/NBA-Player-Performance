@@ -230,6 +230,26 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
   return {injuryRows,depthRows,failures};
 }
 
+
+export async function forceAvailabilityRefresh() {
+  const teamPayload = await espn("/teams");
+  const teams: EspnTeam[] = (teamPayload.sports?.[0]?.leagues?.[0]?.teams ?? [])
+    .map(asTeam).filter((t: EspnTeam) => CANON[t.abbreviation]);
+  if (teams.length !== 30) throw new Error(`Expected 30 NBA teams; received ${teams.length}`);
+  const teamRows = teams.map(team => ({...team,canonical:CANON[team.abbreviation]}));
+  const teamDbResult = await pool.query("SELECT id,abbreviation FROM teams");
+  const teamDb = new Map<string,number>(teamDbResult.rows.map((r:any) => [r.abbreviation, Number(r.id)]));
+  const result = await syncAvailabilityAndDepth(teamRows,teamDb);
+  await pool.query(
+    `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,records_received,records_written,error_message,metadata)
+     VALUES('espn','nba_manual_availability_refresh',now(),now(),$1,30,$2,$3,$4::jsonb)`,
+    [result.failures.length ? "completed_with_errors" : "completed",
+     result.injuryRows+result.depthRows,result.failures.length ? result.failures.join("\\n") : null,
+     JSON.stringify({injury_rows:result.injuryRows,depth_chart_entries:result.depthRows,failures:result.failures})]
+  );
+  return result;
+}
+
 async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gameDb: Map<string, number>) {
   const summary = await espn("/summary", { event: event.id });
   const gameId = gameDb.get(event.id);
