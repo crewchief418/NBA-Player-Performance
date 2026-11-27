@@ -14,7 +14,7 @@ type Projection = {
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
 type VegasLine = {
-  full_name: string; game_date: string; home_team: string; away_team: string;
+  player_id: number; game_id: number; full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
   sportsbook_name: string; projected_mean: string; edge: string; captured_at: string;
   injury_status?: string; injury_detail?: string | null;
@@ -62,7 +62,12 @@ function TeamMark({abbr,large=false}:{abbr:string;large?:boolean}) {
 function PlayerCard({player,vegasLines}:{player:Projection;vegasLines:VegasLine[]}) {
   const [expanded,setExpanded] = useState(false);
   const [headshotFailed,setHeadshotFailed] = useState(false);
-  const playerLines = vegasLines.filter(line => line.full_name.trim().toLowerCase() === player.full_name.trim().toLowerCase() && line.game_date.slice(0,10) === player.game_date.slice(0,10));
+  const playerLines = vegasLines.filter(line =>
+    line.player_id != null && line.game_id != null
+      ? Number(line.player_id) === Number(player.player_id) && Number(line.game_id) === Number(player.game_id)
+      : line.full_name.trim().toLowerCase() === player.full_name.trim().toLowerCase()
+        && String(line.game_date).slice(0,10) === String(player.game_date).slice(0,10)
+  );
   const marketGroups = [...new Set(playerLines.map(line=>line.market_name))];
   return <article className={expanded ? "player-card expanded" : "player-card"}>
     <button className="player-main" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>
