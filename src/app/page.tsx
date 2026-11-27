@@ -93,10 +93,12 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       fetch("/api/status").then(r=>r.json()),
-      fetch("/api/projections").then(r=>r.json()),
-      fetch("/api/model").then(r=>r.json()).catch(()=>null)
-    ]).then(([s,p,m]) => { setStatus(s); setRows(p.projections ?? []); setModel(m); })
-      .catch(()=>setStatus({connected:false}))
+      fetch("/api/projections").then(r=>r.json())
+    ]).then(([s,p]) => {
+      setStatus(s);
+      setRows(p.projections ?? []);
+      fetch("/api/model").then(r=>r.json()).then(setModel).catch(()=>setModel(null));
+    }).catch(()=>setStatus({connected:false}))
       .finally(()=>setLoading(false));
   },[]);
 
