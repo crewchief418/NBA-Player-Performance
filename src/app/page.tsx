@@ -10,7 +10,7 @@ type Projection = {
   home_team: string; away_team: string; sample_size: number; avg_minutes: string;
   points: string; rebounds: string; assists: string; threes_made: string;
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
-  starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_detail?: string; rest_days?: number;
+  starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
 
@@ -64,7 +64,7 @@ function PlayerCard({player}:{player:Projection}) {
             ? <img src={`https://a.espncdn.com/i/headshots/nba/players/full/${player.espn_id}.png`} alt="" onError={()=>setHeadshotFailed(true)}/>
             : <span>{player.full_name.split(" ").map(x=>x[0]).slice(0,2).join("")}</span>}
         </div>
-        <div className="player-name"><strong>{player.full_name}</strong><span>{player.position || "PLAYER"} <i/> {player.avg_minutes || "—"} MIN AVG</span><small className="player-team"><TeamMark abbr={player.roster_team || "NBA"}/> <b>{teamNames[player.roster_team || ""] || player.roster_team || "TEAM TBD"}</b></small></div>
+        <div className="player-name"><strong>{player.full_name} {player.injury_designator && <em className={`injury-tag injury-${player.injury_designator.toLowerCase()}`} title={`${player.injury_status}${player.injury_detail ? ` — ${player.injury_detail}` : ""}`}>{player.injury_designator}</em>}</strong><span>{player.position || "PLAYER"} <i/> {player.avg_minutes || "—"} MIN AVG</span><small className="player-team"><TeamMark abbr={player.roster_team || "NBA"}/> <b>{teamNames[player.roster_team || ""] || player.roster_team || "TEAM TBD"}</b></small></div>
       </div>
       <div className="primary-stat"><strong>{player.points}</strong><span>PTS</span></div>
       <div className="primary-stat"><strong>{player.rebounds}</strong><span>REB</span></div>
@@ -183,7 +183,7 @@ export default function Home() {
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span></div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
-        {expandedGames[game.gameId] && <div className="player-list">{game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>}
+        {expandedGames[game.gameId] && <div className="player-list">{game.players.some(p=>p.injury_designator) && <div className="game-injury-report"><div className="game-injury-title">INJURY REPORT <span>{game.players.filter(p=>p.injury_designator).length} LISTED</span></div><div className="game-injury-items">{game.players.filter(p=>p.injury_designator).sort((a,b)=>String(a.injury_designator).localeCompare(String(b.injury_designator)) || a.full_name.localeCompare(b.full_name)).map(p=><span key={p.player_id}><b className={`injury-tag injury-${p.injury_designator?.toLowerCase()}`}>{p.injury_designator}</b>{p.full_name} <small>{p.injury_status}</small></span>)}</div></div>} {game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>}
       </section>)}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
