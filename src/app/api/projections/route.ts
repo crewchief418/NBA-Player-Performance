@@ -143,7 +143,7 @@ export async function GET() {
       league_pace AS (SELECT avg(possessions) possessions FROM team_game_pace),
       injury_latest AS (
         SELECT DISTINCT ON(player_id) player_id,status,injury
-        FROM injury_reports WHERE report_date>=CURRENT_DATE-1
+        FROM injury_reports WHERE report_date=CURRENT_DATE
         ORDER BY player_id,report_date DESC,captured_at DESC
       ),
       team_rotation AS (
