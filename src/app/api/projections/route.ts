@@ -260,6 +260,7 @@ export async function GET() {
 
     // Save every forecast as a reproducible model snapshot. Repeated refreshes in the same minute update it.
     const marketRows = await pool.query("SELECT id,market_key FROM prop_markets WHERE active=true");
+    const marketKeyByStat: Record<string,string> = {points:"player_points",rebounds:"player_rebounds",assists:"player_assists",threes_made:"player_threes",steals:"player_steals",blocks:"player_blocks",pra:"player_points_rebounds_assists",pr:"player_points_rebounds",pa:"player_points_assists",ra:"player_rebounds_assists"};
     const marketIds = new Map<string,number>(marketRows.rows.map((r:any)=>[String(r.market_key),Number(r.id)]));
     const snapshotRows: any[] = [];
     for (const p of result.rows) {
@@ -269,7 +270,7 @@ export async function GET() {
         pra:Number(p.pra),pr:Number(p.pr),pa:Number(p.pa),ra:Number(p.ra)
       };
       for (const [key] of markets) {
-        const marketId=marketIds.get(key);
+        const marketId=marketIds.get(marketKeyByStat[key] ?? key);
         if (marketId) snapshotRows.push({
           game_id:p.game_id,player_id:p.player_id,market_id:marketId,model_version_id:modelVersionId,
           projected_mean:values[key],expected_minutes:Number(p.avg_minutes),
