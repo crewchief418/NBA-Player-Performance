@@ -159,41 +159,60 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
     const current = new Date();
     const reportDate = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(current);
     const entries: any[] = [];
+    let skippedMissingPlayerId = 0;
+    const providerTeamIds = new Map(teamRows.map(team => [String(team.id), team.canonical]));
     for (const group of groups) {
-      const teamAbbr = CANON[String(group.team?.abbreviation ?? "")] ?? String(group.team?.abbreviation ?? "");
-      const teamId = teamDb.get(teamAbbr);
+      // ESPN's league injury feed uses {id, displayName, injuries}; it does not
+      // include group.team.abbreviation. Resolve the group's ESPN team id instead.
+      const teamAbbr = providerTeamIds.get(String(group.id ?? ""));
+      const teamId = teamAbbr ? teamDb.get(teamAbbr) ?? null : null;
       for (const item of (group.injuries ?? [])) {
         const athlete = item.athlete ?? {};
-        const playerProviderId = String(athlete.id ?? "");
-        if (!playerProviderId) continue;
+        // The injury feed omits athlete.id. The ESPN player-card URL contains
+        // the same provider ID used by the roster and box-score feeds.
+        const playerHref = (athlete.links ?? []).find((link: any) =>
+          Array.isArray(link.rel) && link.rel.includes("playercard")
+        )?.href ?? (athlete.links ?? []).find((link: any) =>
+          /\/player\//i.test(String(link.href ?? ""))
+        )?.href ?? "";
+        const playerProviderId = String(athlete.id ?? String(playerHref).match(/\/id\/(\d+)/)?.[1] ?? "");
+        if (!playerProviderId) { skippedMissingPlayerId++; continue; }
         entries.push({playerProviderId,teamId,status:normalizeInjuryStatus(item.status ?? item.type?.name),
-          injury:String(item.longComment ?? item.shortComment ?? item.details ?? item.detail ?? item.type?.description ?? item.type?.name ?? "Injury report"),
+          injury:String(item.shortComment ?? item.longComment ?? item.details ?? item.detail ?? item.type?.description ?? item.type?.name ?? "Injury report"),
           raw:item});
       }
     }
-    // A valid league-wide feed is a complete current snapshot; first clear today's ESPN statuses,
-    // then apply the players ESPN currently lists. If ESPN reports no injuries, this correctly
-    // leaves today's players available rather than retaining stale reports from earlier runs.
-    await pool.query(
-      "UPDATE injury_reports SET status='AVAILABLE',injury=NULL,captured_at=now() WHERE report_date=$1 AND source='espn'",
-      [reportDate]
-    );
+    if (groups.length === 0) throw new Error("ESPN injury feed contained no team groups; existing reports preserved");
+    if (entries.length === 0) throw new Error(`ESPN injury feed had ${groups.length} groups but no resolvable player IDs; existing reports preserved`);
+    let unmatchedPlayers = 0;
+    const resolved: Array<{playerId:number;teamId:number|null;status:string;injury:string;raw:any}> = [];
     for (const item of entries) {
       const player = await pool.query(
         "SELECT id FROM players WHERE provider='espn' AND provider_player_id=$1 LIMIT 1",
         [item.playerProviderId]
       );
-      if (!player.rowCount) continue;
+      if (!player.rowCount) { unmatchedPlayers++; continue; }
+      resolved.push({...item,playerId:Number(player.rows[0].id)});
+    }
+    if (resolved.length === 0) throw new Error(`ESPN returned ${entries.length} injuries, but none matched the ESPN player IDs in the database; existing reports preserved`);
+    // Only clear stale statuses after a non-empty, player-resolved league snapshot is confirmed.
+    await pool.query(
+      "UPDATE injury_reports SET status='AVAILABLE',injury=NULL,captured_at=now() WHERE report_date=$1 AND source='espn'",
+      [reportDate]
+    );
+    for (const item of resolved) {
       await pool.query(
         `INSERT INTO injury_reports(player_id,team_id,report_date,status,injury,source,captured_at,raw_report)
          VALUES($1,$2,$3,$4,$5,'espn',now(),$6::jsonb)
          ON CONFLICT(player_id,report_date,source) DO UPDATE SET
            team_id=EXCLUDED.team_id,status=EXCLUDED.status,injury=EXCLUDED.injury,
            captured_at=now(),raw_report=EXCLUDED.raw_report`,
-        [player.rows[0].id,item.teamId,reportDate,item.status,item.injury,JSON.stringify(item.raw)]
+        [item.playerId,item.teamId,reportDate,item.status,item.injury,JSON.stringify(item.raw)]
       );
       injuryRows++;
     }
+    console.log("ESPN injury snapshot imported", {groups:groups.length,feedEntries:entries.length,
+      matchedPlayers:resolved.length,unmatchedPlayers,skippedMissingPlayerId});
   } catch (error) {
     failures.push("Injuries: " + (error instanceof Error ? error.message : String(error)));
   }
