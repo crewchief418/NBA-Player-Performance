@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
       }
     }
     // Current depth charts add a lineup-role signal; actual recent starts remain the primary evidence.
+    await pool.query("UPDATE players SET metadata=metadata-'depth_chart_rank'-'depth_chart_position'-'depth_chart_updated_at' WHERE provider='espn'");
     const teamRecords=await pool.query("SELECT provider_team_id FROM teams WHERE provider='espn'");
     const teamIdsToCheck=teamRecords.rows.map((row:any)=>String(row.provider_team_id)).filter(Boolean);
     for(let offset=0;offset<teamIdsToCheck.length;offset+=6) {
