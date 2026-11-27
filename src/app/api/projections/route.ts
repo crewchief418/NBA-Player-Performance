@@ -146,6 +146,16 @@ export async function GET() {
         FROM injury_reports WHERE report_date=CURRENT_DATE
         ORDER BY player_id,report_date DESC,captured_at DESC
       ),
+      roster_players AS (
+        SELECT p.*,
+          CASE p.metadata->>'roster_team'
+            WHEN 'NY' THEN 'NYK' WHEN 'GS' THEN 'GSW' WHEN 'NO' THEN 'NOP'
+            WHEN 'PHX' THEN 'PHO' WHEN 'SA' THEN 'SAS' WHEN 'WSH' THEN 'WAS'
+            WHEN 'BKN' THEN 'BRK' WHEN 'CHA' THEN 'CHO' WHEN 'UTAH' THEN 'UTA'
+            ELSE p.metadata->>'roster_team'
+          END AS roster_team
+        FROM players p WHERE p.active=true
+      ),
       team_rotation AS (
         SELECT p.metadata->>'roster_team' team_abbr,
           sum(r.recent_minutes) FILTER(WHERE coalesce(i.status,'') NOT IN ('OUT','DOUBTFUL')) active_minutes
@@ -165,9 +175,9 @@ export async function GET() {
         SELECT p.full_name,p.position,p.metadata->>'espn_id' espn_id,
           lg.id game_id,lg.game_date,lg.scheduled_start,
           ht.abbreviation home_team,at.abbreviation away_team,
-          (p.metadata->>'roster_team'=ht.abbreviation) is_home,
-          CASE WHEN p.metadata->>'roster_team'=ht.abbreviation THEN lg.away_team_id ELSE lg.home_team_id END opponent_team_id,
-          p.metadata->>'roster_team' roster_team,p.metadata->>'depth_chart_rank' depth_chart_rank,p.metadata->>'depth_chart_position' depth_chart_position,r.*,
+          (p.roster_team=ht.abbreviation) is_home,
+          CASE WHEN p.roster_team=ht.abbreviation THEN lg.away_team_id ELSE lg.home_team_id END opponent_team_id,
+          p.roster_team,p.metadata->>'depth_chart_rank' depth_chart_rank,p.metadata->>'depth_chart_position' depth_chart_position,r.*,
           coalesce(i.status,'') injury_status,coalesce(i.injury,'') injury_detail,
           coalesce(tm.missing_minutes,0) missing_minutes,coalesce(tr.active_minutes,0) active_rotation_minutes,
           coalesce(pa.possessions,lp.possessions) home_pace,
@@ -178,7 +188,7 @@ export async function GET() {
           ld.steals_allowed league_steals_allowed,ld.blocks_allowed league_blocks_allowed,
           (lg.game_date-r.last_game_date) rest_days
         FROM latest_games lg JOIN teams ht ON ht.id=lg.home_team_id JOIN teams at ON at.id=lg.away_team_id
-        JOIN players p ON p.active=true AND p.metadata->>'roster_team' IN (ht.abbreviation,at.abbreviation)
+        JOIN roster_players p ON p.roster_team IN (ht.abbreviation,at.abbreviation)
         JOIN rates r ON r.player_id=p.id
         LEFT JOIN injury_latest i ON i.player_id=p.id
         LEFT JOIN team_missing tm ON tm.team_abbr=p.metadata->>'roster_team'
