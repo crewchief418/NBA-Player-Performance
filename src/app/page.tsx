@@ -9,6 +9,7 @@ type Projection = {
   home_team: string; away_team: string; sample_size: number; avg_minutes: string;
   points: string; rebounds: string; assists: string; threes_made: string;
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
+  starter_probability?: string; injury_status?: string; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
 
@@ -89,8 +90,9 @@ export default function Home() {
   useEffect(() => {
     Promise.all([
       fetch("/api/status").then(r=>r.json()),
-      fetch("/api/projections").then(r=>r.json())
-    ]).then(([s,p]) => { setStatus(s); setRows(p.projections ?? []); })
+      fetch("/api/projections").then(r=>r.json()),
+      fetch("/api/model").then(r=>r.json()).catch(()=>null)
+    ]).then(([s,p,m]) => { setStatus(s); setRows(p.projections ?? []); setModel(m); })
       .catch(()=>setStatus({connected:false}))
       .finally(()=>setLoading(false));
   },[]);
