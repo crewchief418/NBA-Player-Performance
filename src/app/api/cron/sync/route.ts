@@ -340,6 +340,39 @@ export async function GET(request: NextRequest) {
       [rosterIds]
     );
 
+    // Settle saved forecasts against ESPN box scores so real model performance is tracked.
+    await pool.query(`
+      WITH actuals AS (
+        SELECT pgs.game_id,pgs.player_id,v.market_key,v.actual_value
+        FROM player_game_stats pgs
+        JOIN games g ON g.id=pgs.game_id
+        CROSS JOIN LATERAL (VALUES
+          ('points',pgs.points),('rebounds',pgs.rebounds),('assists',pgs.assists),
+          ('threes_made',pgs.threes_made),('steals',pgs.steals),('blocks',pgs.blocks),
+          ('pra',pgs.points+pgs.rebounds+pgs.assists),('pr',pgs.points+pgs.rebounds),
+          ('pa',pgs.points+pgs.assists),('ra',pgs.rebounds+pgs.assists)
+        ) v(market_key,actual_value)
+        WHERE g.status='final' AND g.game_date>=CURRENT_DATE-INTERVAL '30 days'
+          AND v.actual_value IS NOT NULL
+      )
+      INSERT INTO prop_results(game_id,player_id,market_id,actual_value,source)
+      SELECT a.game_id,a.player_id,m.id,a.actual_value,'espn'
+      FROM actuals a JOIN prop_markets m ON m.market_key=a.market_key AND m.active=true
+      ON CONFLICT(game_id,player_id,market_id) DO UPDATE
+      SET actual_value=EXCLUDED.actual_value,settled_at=now(),source='espn'
+    `);
+    await pool.query(`
+      INSERT INTO prediction_grades(projection_id,prop_line_id,result,actual_value,absolute_error,squared_error,graded_at)
+      SELECT p.id,NULL,'graded',r.actual_value,abs(p.projected_mean-r.actual_value),
+        power(p.projected_mean-r.actual_value,2),now()
+      FROM projections p
+      JOIN prop_results r ON r.game_id=p.game_id AND r.player_id=p.player_id AND r.market_id=p.market_id
+      JOIN games g ON g.id=p.game_id AND g.status='final'
+      JOIN model_versions mv ON mv.id=p.model_version_id AND mv.model_key='courtside_player_performance'
+      WHERE g.game_date>=CURRENT_DATE-INTERVAL '30 days'
+        AND NOT EXISTS(SELECT 1 FROM prediction_grades pg WHERE pg.projection_id=p.id AND pg.prop_line_id IS NULL)
+    `);
+
     const recordsReceived = events.length;
     const recordsWritten = gamesWritten + playerRowsWritten + rosterPlayers;
     await pool.query(
