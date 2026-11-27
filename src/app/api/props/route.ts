@@ -53,7 +53,8 @@ function injuryStatus(value: unknown) {
   if(s.includes("question") || s==="game time decision") return "QUESTIONABLE";
   if(s.includes("day to day")) return "DAY-TO-DAY";
   if(s.includes("prob")) return "PROBABLE";
-  return "AVAILABLE";
+  if(s==="available" || s==="cleared" || s==="active") return "AVAILABLE";
+  return "OTHER";
 }
 async function loadInjuries(apiKey: string) {
   const response=await fetch("https://api.prop-line.com/v1/sports/basketball_nba/injuries",{
