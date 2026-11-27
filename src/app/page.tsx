@@ -17,6 +17,7 @@ type VegasLine = {
   full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
   sportsbook_name: string; projected_mean: string; edge: string; captured_at: string;
+  injury_status?: string; injury_detail?: string | null;
 };
 
 const stats = [
@@ -167,12 +168,12 @@ export default function Home() {
       <div className="overview-strip vegas-summary">
         <div><span>COMPARISONS</span><strong>{vegasLines.length}</strong><small>MAIN MARKET LINES</small></div>
         <div><span>SPORTSBOOKS</span><strong>{new Set(vegasLines.map(x=>x.sportsbook_name)).size}</strong><small>BOOKS IN THIS SNAPSHOT</small></div>
-        <div><span>MODEL HIGHER</span><strong>{vegasLines.filter(x=>Number(x.edge)>0).length}</strong><small>PROJECTION ABOVE LINE</small></div>
-        <div><span>MODEL LOWER</span><strong>{vegasLines.filter(x=>Number(x.edge)<0).length}</strong><small>PROJECTION BELOW LINE</small></div>
+        <div><span>MODEL HIGHER</span><strong>{vegasLines.filter(x=>x.injury_status!=="OUT" && Number(x.edge)>0).length}</strong><small>AVAILABLE / NOT OUT</small></div>
+        <div><span>MODEL LOWER</span><strong>{vegasLines.filter(x=>x.injury_status!=="OUT" && Number(x.edge)<0).length}</strong><small>AVAILABLE / NOT OUT</small></div>
       </div>
       {propsMessage && <p className="backtest-method" role="status">{propsMessage}</p>}
-      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / MATCHUP</th><th>MARKET</th><th>SPORTSBOOK</th><th>VEGAS LINE</th><th>COURTSIDE</th><th>DIFFERENCE</th></tr></thead><tbody>{vegasLines.slice(0,200).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`}><td><strong>{line.full_name}</strong><br/><span>{line.away_team} @ {line.home_team}</span></td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>Over {line.over_odds ?? "—"} / Under {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No comparable player props are available yet. Update Vegas lines after projections for the slate have been generated.</p>}
-      <p className="backtest-method">Lines are provider snapshots, not guaranteed current betting offers. A positive difference means Courtside's projection is higher than the line; a negative difference means lower.</p>
+      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / MATCHUP</th><th>STATUS</th><th>MARKET</th><th>SPORTSBOOK</th><th>VEGAS LINE</th><th>COURTSIDE</th><th>DIFFERENCE</th></tr></thead><tbody>{vegasLines.slice(0,200).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`} className={line.injury_status==="OUT"?"vegas-player-out":""}><td><strong>{line.full_name}</strong><br/><span>{line.away_team} @ {line.home_team}</span></td><td><span className={`vegas-injury-status vegas-status-${(line.injury_status ?? "UNREPORTED").toLowerCase().replace(/[^a-z]+/g,"-")}`}>{line.injury_status ?? "UNREPORTED"}</span>{line.injury_detail && <><br/><span>{line.injury_detail}</span></>}</td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>Over {line.over_odds ?? "—"} / Under {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No comparable player props are available yet. Update Vegas lines after projections for the slate have been generated.</p>}
+      <p className="backtest-method">Lines are provider snapshots, not guaranteed current betting offers. OUT players remain visible for reference but are excluded from actionable edge counts. Questionable, doubtful and day-to-day players are flagged; UNREPORTED means no current injury status was matched. A positive difference means Courtside's projection is higher than the line; a negative difference means lower.</p>
     </section>
 
     {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
