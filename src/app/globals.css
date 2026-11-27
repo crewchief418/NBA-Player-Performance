@@ -117,3 +117,12 @@
  .book-number strong,.book-edge strong{font-size:17px}
  .player-market-title{padding:9px}
 }
+
+
+/* Category-specific sportsbook edge threshold highlights */
+.player-name.threshold-hit strong{color:var(--lime)}
+.player-market-title.threshold-hit>strong{color:var(--lime)}
+.threshold-indicator{font:8px 'DM Mono',monospace;font-style:normal;letter-spacing:.5px;color:#77858d;border:1px solid #35434b;border-radius:3px;padding:3px 5px;white-space:nowrap}
+.threshold-indicator.active{color:var(--lime);border-color:#60764b;background:#a4d65b12}
+.book-edge.threshold-met strong{color:var(--lime)!important}
+.book-edge.threshold-met{border-right:2px solid var(--lime);padding-right:7px}
