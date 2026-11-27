@@ -13,6 +13,11 @@ type Projection = {
   starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
+type VegasLine = {
+  full_name: string; game_date: string; home_team: string; away_team: string;
+  market_name: string; line: string; over_odds: number | null; under_odds: number | null;
+  sportsbook_name: string; projected_mean: string; edge: string; captured_at: string;
+};
 
 const stats = [
   ["points","PTS"],["rebounds","REB"],["assists","AST"],
@@ -96,6 +101,9 @@ export default function Home() {
   const [injuryRefreshMessage,setInjuryRefreshMessage] = useState("");
   const [refreshingResults,setRefreshingResults] = useState(false);
   const [resultsRefreshMessage,setResultsRefreshMessage] = useState("");
+  const [fetchingProps,setFetchingProps] = useState(false);
+  const [propsMessage,setPropsMessage] = useState("");
+  const [vegasLines,setVegasLines] = useState<VegasLine[]>([]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
@@ -113,6 +121,7 @@ export default function Home() {
       setRows(p.projections ?? []);
       fetch("/api/model").then(r=>r.json()).then(setModel).catch(()=>setModel(null));
     }).catch(()=>setStatus({connected:false}))
+    fetch("/api/props").then(r=>r.json()).then(data=>setVegasLines(data.lines ?? [])).catch(()=>setVegasLines([]));
       .finally(()=>setLoading(false));
   },[]);
 
@@ -179,6 +188,27 @@ export default function Home() {
         }}>{refreshingInjuries ? "UPDATING…" : "UPDATE INJURIES"}</button>
         {injuryRefreshMessage && <p role="status">{injuryRefreshMessage}</p>}
       </div>
+      <div className="manual-injury-refresh">
+        <div><strong>VEGAS PLAYER PROPS</strong><span>Compare saved Courtside forecasts with sportsbook player-prop lines. The feed is limited to one successful fetch per UTC day.</span></div>
+        <button type="button" disabled={fetchingProps} onClick={async()=>{
+          setFetchingProps(true);setPropsMessage("");
+          try {
+            const response=await fetch("/api/props",{method:"POST"});
+            const result=await response.json();
+            if(!response.ok) throw new Error(result.error || "Vegas props update failed");
+            const board=await fetch("/api/props").then(r=>r.json());
+            setVegasLines(board.lines ?? []);
+            setPropsMessage(result.already_fetched
+              ? `Already collected today · showing ${board.lines?.length ?? 0} model comparisons`
+              : `Fetched ${result.events_received ?? 0} games · saved ${result.records_written ?? 0} player lines · matched ${result.players_matched ?? 0} players${result.unmatched_players ? ` · ${result.unmatched_players} player names not matched` : ""}`);
+          } catch(error) {
+            setPropsMessage(error instanceof Error ? error.message : "Vegas props update failed");
+          } finally { setFetchingProps(false); }
+        }}>{fetchingProps ? "FETCHING…" : "FETCH VEGAS PROPS"}</button>
+        {propsMessage && <p role="status">{propsMessage}</p>}
+      </div>
+      <div className="backtest-heading saved-grade-heading"><div><h3>Biggest model vs. market differences</h3><p>Positive means Courtside projects higher than the sportsbook line; negative means lower. Differences are not betting recommendations.</p></div></div>
+      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / GAME</th><th>STAT</th><th>BOOK</th><th>LINE</th><th>MODEL</th><th>MODEL − LINE</th></tr></thead><tbody>{vegasLines.slice(0,100).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`}><td>{line.full_name}<br/><span>{line.away_team} @ {line.home_team}</span></td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>O {line.over_odds ?? "—"} / U {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No saved sportsbook lines with matching projections yet. Use Fetch Vegas Props after the slate opens.</p>}
       <details className="model-lab" open>
         <summary><span>MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>
         <div className="model-lab-content">
