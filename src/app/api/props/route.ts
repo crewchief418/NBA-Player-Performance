@@ -136,7 +136,6 @@ export async function GET() {
         AND coalesce(pl.raw_line->>'line_type','main')='main'
         AND forecast.projected_mean>0
       ORDER BY abs(forecast.projected_mean-pl.line) DESC, pl.captured_at DESC
-      LIMIT 300
     `);
     const lastRun = await pool.query(`
       SELECT completed_at,records_received,records_written
