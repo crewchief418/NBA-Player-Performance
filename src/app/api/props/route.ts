@@ -126,7 +126,7 @@ export async function GET() {
         SELECT ir.status,ir.injury
         FROM injury_reports ir
         WHERE ir.player_id=pl.player_id AND ir.report_date>=CURRENT_DATE-1
-        ORDER BY CASE WHEN ir.source='propline' THEN 0 ELSE 1 END,ir.captured_at DESC
+        ORDER BY ir.captured_at DESC
         LIMIT 1
       ) injury ON true
       WHERE pl.source='propline'
