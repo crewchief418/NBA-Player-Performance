@@ -32,6 +32,7 @@ export async function GET() {
         WHERE g.season=2027 AND g.season_type='regular'
           AND g.status IN ('scheduled','pre-game','pregame')
           AND g.game_date >= CURRENT_DATE
+          AND (g.scheduled_start IS NULL OR g.scheduled_start > now())
         ORDER BY g.game_date,g.scheduled_start LIMIT 30
       ),
       history AS (
