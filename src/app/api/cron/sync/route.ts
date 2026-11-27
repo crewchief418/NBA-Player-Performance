@@ -156,7 +156,6 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
     const payload = await espn("/injuries");
     const groups = Array.isArray(payload?.injuries) ? payload.injuries : null;
     if (!groups || payload?.status === "error") throw new Error("ESPN injury feed did not return a valid injuries array");
-    const current = new Date();
     const reportDate = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(current);
     const entries: any[] = [];
     for (const group of groups) {
@@ -505,7 +504,7 @@ export async function GET(request: NextRequest) {
     `);
 
     const recordsReceived = events.length;
-    const recordsWritten = gamesWritten + playerRowsWritten + rosterPlayers;
+    const recordsWritten = gamesWritten + playerRowsWritten + rosterPlayers + availability.injuryRows + availability.depthRows;
     await pool.query(
       `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,records_received,
          records_written,error_message,metadata)
