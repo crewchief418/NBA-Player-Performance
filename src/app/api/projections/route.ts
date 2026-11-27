@@ -143,7 +143,7 @@ export async function GET() {
       league_pace AS (SELECT avg(possessions) possessions FROM team_game_pace),
       injury_latest AS (
         SELECT DISTINCT ON(player_id) player_id,status,injury
-        FROM injury_reports WHERE report_date=CURRENT_DATE
+        FROM injury_reports WHERE report_date=(now() AT TIME ZONE 'America/New_York')::date
         ORDER BY player_id,report_date DESC,captured_at DESC
       ),
       roster_players AS (
@@ -197,11 +197,11 @@ export async function GET() {
         CROSS JOIN league_defense ld CROSS JOIN league_pace lp
         LEFT JOIN pace_avg pa ON pa.team_id=lg.home_team_id
         LEFT JOIN pace_avg pb ON pb.team_id=lg.away_team_id
-        WHERE coalesce(i.status,'')<>'OUT'
+        
       ),
       minutes_calc AS (
         SELECT *,
-          greatest(6,least(40,
+          CASE WHEN injury_status='OUT' THEN 0 ELSE greatest(6,least(40,
             (coalesce(0.65*recent_minutes+0.35*season_minutes,recent_minutes)
               + greatest(-3,least(3,coalesce((last3_minutes-recent_minutes)*0.25,0)))
               + CASE WHEN starter_rate>=0.60 THEN 0.5 ELSE 0 END
@@ -210,7 +210,7 @@ export async function GET() {
               + CASE WHEN recent_minutes>=36 THEN -0.6 ELSE 0 END
               + CASE WHEN active_rotation_minutes>0 THEN least(3,missing_minutes*0.50*recent_minutes/active_rotation_minutes) ELSE 0 END
             ) * CASE WHEN injury_status='DOUBTFUL' THEN 0.65 WHEN injury_status='QUESTIONABLE' THEN 0.88 WHEN injury_status IN ('DAY-TO-DAY','DAY TO DAY') THEN 0.93 ELSE 1 END
-          )) expected_minutes,
+          ))) END expected_minutes,
           greatest(0.94,least(1.06,((coalesce(home_pace,0)+coalesce(away_pace,0))/2)/nullif( (SELECT possessions FROM league_pace),0))) pace_factor
         FROM candidates
       ),
@@ -238,18 +238,18 @@ export async function GET() {
       )
       SELECT player_id,full_name,position,espn_id,game_id,game_date,scheduled_start,home_team,away_team,
         roster_team,sample_size,round(expected_minutes::numeric,1) avg_minutes,
-        round((0.80*baseline_points+0.20*(p_rate*expected_minutes/36*p_def*p_venue*pace_factor))::numeric,1) points,
-        round((0.80*baseline_rebounds+0.20*(r_rate*expected_minutes/36*r_def*r_venue*pace_factor))::numeric,1) rebounds,
-        round((0.80*baseline_assists+0.20*(a_rate*expected_minutes/36*a_def*a_venue*pace_factor))::numeric,1) assists,
-        round(baseline_threes::numeric,1) threes_made,
-        round(baseline_steals::numeric,1) steals,
-        round((0.80*baseline_blocks+0.20*(b_rate*expected_minutes/36*b_def*b_venue*pace_factor))::numeric,1) blocks,
-        round((0.80*(baseline_points+baseline_rebounds+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) pra,
-        round((0.80*(baseline_points+baseline_rebounds)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(r_rate*expected_minutes/36*r_def*r_venue*pace_factor)))::numeric,1) pr,
-        round((0.80*(baseline_points+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) pa,
-        round((0.80*(baseline_rebounds+baseline_assists)+0.20*((r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) ra,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*baseline_points+0.20*(p_rate*expected_minutes/36*p_def*p_venue*pace_factor)) END::numeric,1) points,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*baseline_rebounds+0.20*(r_rate*expected_minutes/36*r_def*r_venue*pace_factor)) END::numeric,1) rebounds,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*baseline_assists+0.20*(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)) END::numeric,1) assists,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE baseline_threes END::numeric,1) threes_made,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE baseline_steals END::numeric,1) steals,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*baseline_blocks+0.20*(b_rate*expected_minutes/36*b_def*b_venue*pace_factor)) END::numeric,1) blocks,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*(baseline_points+baseline_rebounds+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor))) END::numeric,1) pra,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*(baseline_points+baseline_rebounds)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(r_rate*expected_minutes/36*r_def*r_venue*pace_factor))) END::numeric,1) pr,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*(baseline_points+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor))) END::numeric,1) pa,
+        round(CASE WHEN injury_status='OUT' THEN 0 ELSE (0.80*(baseline_rebounds+baseline_assists)+0.20*((r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor))) END::numeric,1) ra,
         round((greatest(starter_rate,CASE WHEN depth_chart_rank='1' THEN 0.75 WHEN depth_chart_rank='2' THEN 0.45 ELSE 0 END)*100)::numeric,0) starter_probability,
-        depth_chart_rank,depth_chart_position,injury_status,injury_detail,rest_days,
+        depth_chart_rank,depth_chart_position,injury_status,injury_detail,\n        CASE injury_status WHEN 'OUT' THEN 'O' WHEN 'DOUBTFUL' THEN 'D' WHEN 'QUESTIONABLE' THEN 'Q' ELSE NULL END injury_designator,rest_days,
         jsonb_build_object('sample_size',sample_size,'weighted_recent_per36',jsonb_build_object('points',p_rate,'rebounds',r_rate,'assists',a_rate,'threes',t_rate,'steals',s_rate,'blocks',b_rate),
           'opponent_defense',jsonb_build_object('points',p_def,'rebounds',r_def,'assists',a_def,'threes',t_def,'steals',s_def,'blocks',b_def),
           'pace_factor',pace_factor,'home_away',is_home,'rest_days',rest_days,'starter_rate',starter_rate,'depth_chart_rank',depth_chart_rank,'depth_chart_position',depth_chart_position,
