@@ -92,7 +92,8 @@ export default function Home() {
   const [modelMenuOpen,setModelMenuOpen] = useState(false);
   const [expandedGames,setExpandedGames] = useState<Record<number,boolean>>({});
   const [installPrompt,setInstallPrompt] = useState<any>(null);
-  const [refreshingInjuries,setRefreshingInjuries] = useState(false);\n  const [injuryRefreshMessage,setInjuryRefreshMessage] = useState("");
+  const [refreshingInjuries,setRefreshingInjuries] = useState(false);
+  const [injuryRefreshMessage,setInjuryRefreshMessage] = useState("");
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
