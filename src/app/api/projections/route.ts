@@ -155,7 +155,7 @@ export async function GET() {
         GROUP BY p.metadata->>'roster_team'
       ),
       candidates AS (
-        SELECT p.id player_id,p.full_name,p.position,p.metadata->>'espn_id' espn_id,
+        SELECT p.full_name,p.position,p.metadata->>'espn_id' espn_id,
           lg.id game_id,lg.game_date,lg.scheduled_start,
           ht.abbreviation home_team,at.abbreviation away_team,
           (p.metadata->>'roster_team'=ht.abbreviation) is_home,
