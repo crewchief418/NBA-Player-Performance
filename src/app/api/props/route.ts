@@ -89,7 +89,7 @@ async function loadBoard() {
 export async function GET() {
   try {
     const result = await pool.query(`
-      SELECT pl.id,pl.line,pl.over_odds,pl.under_odds,pl.captured_at,
+      SELECT pl.id,pl.player_id,pl.game_id,pl.line,pl.over_odds,pl.under_odds,pl.captured_at,
         pl.scheduled_start,pl.raw_line->>'line_type' line_type,
         pl.raw_line->>'provider_event_id' provider_event_id,
         pl.raw_line->>'market_key' provider_market_key,
