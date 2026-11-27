@@ -170,7 +170,7 @@ export async function GET() {
         {name:"Availability and lineup",status:Number(coverage.rows[0].injury_rows)>0?"active":"waiting",detail:"Current ESPN injury statuses and depth-chart roles, plus a conservative redistribution of minutes from unavailable rotation players. Historical injury snapshots are not available yet."},
         {name:"Backtesting",status:"active",detail:"Walk-forward out-of-sample MAE plus saved forecasts graded against completed ESPN box scores."}
       ]
-    });
+    },{headers:{"Cache-Control":"s-maxage=900, stale-while-revalidate=3600"}});
   } catch (error) {
     console.error("Model lab failed",error);
     return NextResponse.json({error:"Model diagnostics are temporarily unavailable."},{status:503});
