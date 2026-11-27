@@ -156,7 +156,7 @@ export async function GET() {
         {name:"Minutes and role",status:"active",detail:"Recent minutes, last-three trend, starter frequency and workload adjustments."},
         {name:"Opponent defense",status:"active",detail:"Opponent's previous eight games, compared with league averages for each stat."},
         {name:"Game environment",status:"active",detail:"Estimated pace from FGA + 0.44 × FTA + turnovers; home/away history and rest."},
-        {name:"Availability and lineup",status:Number(coverage.rows[0].injury_rows)>0?"active":"waiting",detail:"Current ESPN injury statuses, plus a conservative redistribution of minutes from unavailable rotation players. Historical injury snapshots are not available yet."},
+        {name:"Availability and lineup",status:Number(coverage.rows[0].injury_rows)>0?"active":"waiting",detail:"Current ESPN injury statuses and depth-chart roles, plus a conservative redistribution of minutes from unavailable rotation players. Historical injury snapshots are not available yet."},
         {name:"Backtesting",status:"active",detail:"Rolling out-of-sample MAE and bias versus the previous unadjusted last-eight average."}
       ]
     });
