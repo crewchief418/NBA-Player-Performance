@@ -268,9 +268,22 @@ export async function GET(request: NextRequest) {
       gamesWritten++;
     }
 
-    // Recheck a five-day window so delayed box scores and postponed games are retried safely.
+    // Recheck only recent final games that still lack a complete player log.
+    // This keeps the nightly run small while retrying games whose ESPN box score was delayed.
     const cutoff = new Date(Date.now() - 5*24*60*60*1000);
-    const recentFinals = events.filter(e => e.completed && new Date(e.date) >= cutoff);
+    const recentFinalEvents = events.filter(e => e.completed && new Date(e.date) >= cutoff);
+    const existingLogs = await pool.query(
+      `SELECT g.provider_game_id, COUNT(pgs.id)::int AS stat_count
+       FROM games g LEFT JOIN player_game_stats pgs ON pgs.game_id=g.id
+       WHERE g.provider='espn' AND g.season=$1 AND g.status='final'
+         AND g.game_date >= CURRENT_DATE - INTERVAL '5 days'
+       GROUP BY g.provider_game_id`,
+      [SEASON]
+    );
+    const statCounts = new Map<string,number>(
+      existingLogs.rows.map((r:any) => [String(r.provider_game_id), Number(r.stat_count)])
+    );
+    const recentFinals = recentFinalEvents.filter(e => (statCounts.get(e.id) ?? 0) < 15);
     const boxResults = await mapLimit(recentFinals, 3, async event => {
       try {
         const count = await importBoxscore(event, teamDb, gameDb);
