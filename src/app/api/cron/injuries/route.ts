@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { pool } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const ESPN_INJURIES = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries";
 const TEAM_CANON: Record<string,string> = {GS:"GSW",NO:"NOP",NY:"NYK",PHX:"PHO",SA:"SAS",UTAH:"UTA",WSH:"WAS",BRK:"BKN",CHO:"CHA"};
