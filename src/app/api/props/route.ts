@@ -45,6 +45,25 @@ type Outcome = { name?: string; description?: string; price?: number; point?: nu
 type PropMarket = { key?: string; last_update?: string; line_type?: string; outcomes?: Outcome[] };
 type Book = { key?: string; title?: string; markets?: PropMarket[] };
 type Event = { id?: string; home_team?: string; away_team?: string; commence_time?: string; bookmakers?: Book[] };
+type InjuryPlayer = { player_name?: string; player_id?: string; espn_athlete_id?: string; team_abbr?: string; status?: string; status_code?: string; injury_type?: string; detail?: string; expected_return?: string };
+function injuryStatus(value: unknown) {
+  const s=String(value ?? "").toLowerCase().replace(/[_-]+/g," ");
+  if(s==="out" || s==="injured list" || s==="suspended" || s==="out first half") return "OUT";
+  if(s.includes("doubt")) return "DOUBTFUL";
+  if(s.includes("question") || s==="game time decision") return "QUESTIONABLE";
+  if(s.includes("day to day")) return "DAY-TO-DAY";
+  if(s.includes("prob")) return "PROBABLE";
+  return "AVAILABLE";
+}
+async function loadInjuries(apiKey: string) {
+  const response=await fetch("https://api.prop-line.com/v1/sports/basketball_nba/injuries",{
+    headers:{"X-API-Key":apiKey,"Accept":"application/json"},cache:"no-store",signal:AbortSignal.timeout(20000)
+  });
+  if(!response.ok) throw new Error(`PropLine injuries returned HTTP ${response.status}`);
+  const body=await response.json();
+  if(!Array.isArray(body?.players)) throw new Error("PropLine returned an unexpected injury response.");
+  return body.players as InjuryPlayer[];
+}
 
 async function loadBoard() {
   const apiKey = process.env.PROPLINE_API_KEY;
@@ -80,6 +99,8 @@ export async function GET() {
         plr.full_name, g.game_date, ht.abbreviation home_team, at.abbreviation away_team,
         pm.display_name market_name, sb.name sportsbook_name,
         forecast.projected_mean,
+        coalesce(injury.status,'UNREPORTED') injury_status,
+        injury.injury injury_detail,
         round((forecast.projected_mean-pl.line)::numeric,1) edge
       FROM prop_lines pl
       JOIN games g ON g.id=pl.game_id
@@ -100,6 +121,13 @@ export async function GET() {
         ORDER BY p.generated_at DESC
         LIMIT 1
       ) forecast ON true
+      LEFT JOIN LATERAL (
+        SELECT ir.status,ir.injury
+        FROM injury_reports ir
+        WHERE ir.player_id=pl.player_id AND ir.report_date>=CURRENT_DATE-1
+        ORDER BY CASE WHEN ir.source='propline' THEN 0 ELSE 1 END,ir.captured_at DESC
+        LIMIT 1
+      ) injury ON true
       WHERE pl.source='propline'
         AND pl.captured_at>=now()-interval '72 hours'
         AND g.game_date>=CURRENT_DATE
@@ -156,6 +184,7 @@ export async function POST() {
     runId = Number(run.rows[0].id);
 
     const { events, headers } = await loadBoard();
+    const injuryPlayers = await loadInjuries(process.env.PROPLINE_API_KEY!);
     const [gameResult, playerResult, marketResult] = await Promise.all([
       pool.query(`
         SELECT g.id,g.game_date::text,ht.abbreviation home,at.abbreviation away,
@@ -178,6 +207,26 @@ export async function POST() {
       const numericId = String(player.provider_player_id ?? "").replace(/^nba:/,"");
       if (numericId) playerMap.set(`id:${numericId}`, Number(player.id));
     }
+    const reportDate = easternDate(new Date().toISOString());
+    let injuryReportsSaved=0,injuryPlayersUnmatched=0;
+    for(const item of injuryPlayers) {
+      const espnId=String(item.espn_athlete_id ?? item.player_id ?? "").replace(/^espn:/,"");
+      const player=espnId
+        ? await pool.query("SELECT id FROM players WHERE provider='espn' AND provider_player_id=$1 LIMIT 1",[espnId])
+        : await pool.query("SELECT id FROM players WHERE lower(full_name)=lower($1) LIMIT 1",[item.player_name ?? ""]);
+      if(!player.rowCount) { injuryPlayersUnmatched++; continue; }
+      const status=injuryStatus(item.status_code ?? item.status);
+      const detail=[item.injury_type,item.detail].filter(Boolean).join(" — ") || null;
+      await pool.query(`
+        INSERT INTO injury_reports(player_id,report_date,status,injury,expected_return,source,raw_report,captured_at)
+        VALUES($1,$2,$3,$4,$5,'propline',$6::jsonb,now())
+        ON CONFLICT(player_id,report_date,source) DO UPDATE SET
+          status=EXCLUDED.status,injury=EXCLUDED.injury,expected_return=EXCLUDED.expected_return,
+          raw_report=EXCLUDED.raw_report,captured_at=now()
+      `,[Number(player.rows[0].id),reportDate,status,detail,item.expected_return ?? null,JSON.stringify(item)]);
+      injuryReportsSaved++;
+    }
+
     const marketMap = new Map<string, number>();
     for (const market of marketResult.rows) marketMap.set(String(market.market_key), Number(market.id));
     const bookIds = new Map<string, number>();
@@ -295,6 +344,7 @@ export async function POST() {
     `, [runId, outcomesReceived, rows.length, JSON.stringify({
       events_received: events.length, players_matched: playersMatched,
       unmatched_players: unmatchedPlayers, unmatched_events: unmatchedEvents,
+      injury_reports_saved: injuryReportsSaved, injury_players_unmatched: injuryPlayersUnmatched,
       daily_limit: headers.get("x-daily-limit"), daily_remaining: headers.get("x-daily-remaining"),
       missing_markets: headers.get("x-propline-missing-markets")
     })]);
@@ -303,6 +353,7 @@ export async function POST() {
       success: true, events_received: events.length, outcomes_received: outcomesReceived,
       records_written: rows.length, players_matched: playersMatched,
       unmatched_players: unmatchedPlayers, unmatched_events: unmatchedEvents,
+      injury_reports_saved: injuryReportsSaved, injury_players_unmatched: injuryPlayersUnmatched,
       daily_limit: headers.get("x-daily-limit"),
       daily_remaining: headers.get("x-daily-remaining"),
       fetched_at: capturedAt
