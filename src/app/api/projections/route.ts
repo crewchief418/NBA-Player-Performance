@@ -15,9 +15,10 @@ export async function GET() {
       WITH latest_games AS (
         SELECT g.id, g.game_date, g.season_type, g.home_team_id, g.away_team_id
         FROM games g
-        WHERE g.status IN ('scheduled','pre-game','pregame')
+        WHERE g.season = 2027
+          AND g.status IN ('scheduled','pre-game','pregame')
           AND g.game_date >= CURRENT_DATE
-        ORDER BY g.game_date
+        ORDER BY g.game_date, g.scheduled_start
         LIMIT 30
       ),
       recent AS (
@@ -52,9 +53,11 @@ export async function GET() {
       JOIN teams ht ON ht.id = lg.home_team_id
       JOIN teams at ON at.id = lg.away_team_id
       JOIN avgs a ON true
-      JOIN players p ON p.id = a.player_id AND p.active = true
-      ORDER BY lg.game_date, p.full_name
-      LIMIT 250
+      JOIN players p ON p.id = a.player_id
+        AND p.active = true
+        AND p.metadata->>'roster_team' IN (ht.abbreviation, at.abbreviation)
+      ORDER BY lg.game_date, lg.scheduled_start, p.full_name
+      LIMIT 1200
     `);
     return NextResponse.json({ projections: result.rows, markets });
   } catch (error) {
