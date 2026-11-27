@@ -32,7 +32,7 @@ function reportDate() {
 }
 function normalizeStatus(value: unknown) {
   const status=String(value ?? "QUESTIONABLE").toLowerCase();
-  if(status.includes("out")) return "OUT";
+  if(status.includes("out") || status.includes("inactive") || status.includes("injured reserve") || status === "ir") return "OUT";
   if(status.includes("doubt")) return "DOUBTFUL";
   if(status.includes("question")) return "QUESTIONABLE";
   if(status.includes("day")) return "DAY-TO-DAY";
@@ -61,6 +61,9 @@ export async function GET(request: NextRequest) {
     const teamIds=new Map<string,number>(teams.rows.map((t:any)=>[String(t.abbreviation),Number(t.id)]));
     let saved=0,unmatched=0,depthPlayers=0,depthTeams=0;
     const date=reportDate();
+    // ESPN returns a league-wide snapshot; clear earlier same-day statuses before applying it.
+    // This prevents a player who was upgraded to available from remaining questionable/out.
+    await pool.query("UPDATE injury_reports SET status='AVAILABLE',injury=NULL,captured_at=now() WHERE report_date=$1 AND source='espn'",[date]);
     for(const teamEntry of teamEntries) {
       const teamAbbr=String(teamEntry.team?.abbreviation ?? teamEntry.abbreviation ?? "");
       const teamId=teamIds.get(TEAM_CANON[teamAbbr] ?? teamAbbr) ?? null;
@@ -74,9 +77,9 @@ export async function GET(request: NextRequest) {
           [espnId]
         );
         if(!player.rowCount) { unmatched++; continue; }
-        const status=normalizeStatus(item.status?.name ?? item.status);
-        const injury=String(item.type?.name ?? item.type?.description ?? item.details?.type ?? item.shortComment ?? item.longComment ?? "Undisclosed").slice(0,500);
-        const returnDate=item.details?.returnDate ?? item.expectedReturnDate ?? null;
+        const status=normalizeStatus(item.status?.name ?? item.status ?? item.fantasy?.status);
+        const injury=String(item.longComment ?? item.shortComment ?? item.detail ?? item.details?.type ?? item.type?.description ?? item.type?.name ?? "Undisclosed").slice(0,500);
+        const returnDate=item.details?.returnDate ?? item.expectedReturnDate ?? item.expectedReturn ?? null;
         await pool.query(
           `INSERT INTO injury_reports(player_id,team_id,report_date,status,injury,expected_return,source,raw_report,captured_at)
            VALUES($1,$2,$3,$4,$5,$6,'espn',$7::jsonb,now())
