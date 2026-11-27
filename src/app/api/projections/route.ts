@@ -238,7 +238,7 @@ export async function GET() {
         round((0.80*(baseline_points+baseline_assists)+0.20*((p_rate*expected_minutes/36*p_def*p_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) pa,
         round((0.80*(baseline_rebounds+baseline_assists)+0.20*((r_rate*expected_minutes/36*r_def*r_venue*pace_factor)+(a_rate*expected_minutes/36*a_def*a_venue*pace_factor)))::numeric,1) ra,
         round((greatest(starter_rate,CASE WHEN depth_chart_rank='1' THEN 0.75 WHEN depth_chart_rank='2' THEN 0.45 ELSE 0 END)*100)::numeric,0) starter_probability,
-        injury_status,injury_detail,rest_days,
+        depth_chart_rank,depth_chart_position,injury_status,injury_detail,rest_days,
         jsonb_build_object('sample_size',sample_size,'weighted_recent_per36',jsonb_build_object('points',p_rate,'rebounds',r_rate,'assists',a_rate,'threes',t_rate,'steals',s_rate,'blocks',b_rate),
           'opponent_defense',jsonb_build_object('points',p_def,'rebounds',r_def,'assists',a_def,'threes',t_def,'steals',s_def,'blocks',b_def),
           'pace_factor',pace_factor,'home_away',is_home,'rest_days',rest_days,'starter_rate',starter_rate,'depth_chart_rank',depth_chart_rank,'depth_chart_position',depth_chart_position,
