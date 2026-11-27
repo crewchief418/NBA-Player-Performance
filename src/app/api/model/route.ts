@@ -84,7 +84,7 @@ export async function GET() {
           greatest(6,least(40,avg_minutes+greatest(-3,least(3,(last3_minutes-avg_minutes)*0.25))
             +CASE WHEN starter_rate>=0.60 THEN 0.5 ELSE 0 END
             +CASE WHEN avg_minutes>=36 THEN -0.6 ELSE 0 END
-            +CASE WHEN game_date-previous_game_date<=1 THEN -1.2 ELSE 0 END)) expected_minutes,
+            +CASE WHEN h.game_date-h.previous_game_date<=1 THEN -1.2 ELSE 0 END)) expected_minutes,
           greatest(0.88,least(1.12,1+0.45*(coalesce(d.p_def_avg,ld.p)/nullif(ld.p,0)-1))) p_def,
           greatest(0.88,least(1.12,1+0.45*(coalesce(d.r_def_avg,ld.r)/nullif(ld.r,0)-1))) r_def,
           greatest(0.88,least(1.12,1+0.45*(coalesce(d.a_def_avg,ld.a)/nullif(ld.a,0)-1))) a_def,
