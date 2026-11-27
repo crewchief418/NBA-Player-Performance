@@ -229,8 +229,9 @@ export async function POST() {
             const line = grouped.get(key);
             line.outcomes.push(outcome);
             const side = String(outcome.name ?? "").toLowerCase();
-            if (side.startsWith("over")) line.overOdds = Number(outcome.price);
-            if (side.startsWith("under")) line.underOdds = Number(outcome.price);
+            const price = Number(outcome.price);
+            if (Number.isFinite(price) && side.startsWith("over")) line.overOdds = price;
+            if (Number.isFinite(price) && side.startsWith("under")) line.underOdds = price;
           }
 
           for (const line of grouped.values()) {
