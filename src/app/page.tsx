@@ -94,6 +94,8 @@ export default function Home() {
   const [installPrompt,setInstallPrompt] = useState<any>(null);
   const [refreshingInjuries,setRefreshingInjuries] = useState(false);
   const [injuryRefreshMessage,setInjuryRefreshMessage] = useState("");
+  const [refreshingResults,setRefreshingResults] = useState(false);
+  const [resultsRefreshMessage,setResultsRefreshMessage] = useState("");
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
@@ -137,6 +139,26 @@ export default function Home() {
 
     {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
       <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
+      <div className="manual-injury-refresh">
+        <div><strong>COMPLETED GAME RESULTS</strong><span>Pull final ESPN box scores, save player stats and grade saved forecasts.</span></div>
+        <button type="button" disabled={refreshingResults} onClick={async()=>{
+          setRefreshingResults(true);setResultsRefreshMessage("");
+          try {
+            const response=await fetch("/api/cron/sync",{method:"POST"});
+            const result=await response.json();
+            if(!response.ok) throw new Error(result.error || "Game-results update failed");
+            const [nextModel,nextStatus]=await Promise.all([
+              fetch("/api/model").then(r=>r.json()),
+              fetch("/api/status").then(r=>r.json())
+            ]);
+            setModel(nextModel);setStatus(nextStatus);
+            setResultsRefreshMessage(`Checked ${result.completed_games_checked ?? 0} completed games · imported ${result.boxscores_imported ?? 0} box scores · saved ${result.player_game_rows ?? 0} player stat rows${result.failures?.length ? " · Some games need another try" : ""}`);
+          } catch(error) {
+            setResultsRefreshMessage(error instanceof Error ? error.message : "Game-results update failed");
+          } finally { setRefreshingResults(false); }
+        }}>{refreshingResults ? "UPDATING…" : "UPDATE GAME RESULTS"}</button>
+        {resultsRefreshMessage && <p role="status">{resultsRefreshMessage}</p>}
+      </div>
       <div className="manual-injury-refresh">
         <div><strong>LIVE PLAYER AVAILABILITY</strong><span>Pull the latest ESPN injury report and depth charts now.</span></div>
         <button type="button" disabled={refreshingInjuries} onClick={async()=>{
