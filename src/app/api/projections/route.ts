@@ -13,7 +13,7 @@ export async function GET() {
   try {
     const result = await pool.query(`
       WITH latest_games AS (
-        SELECT g.id, g.game_date, g.season_type, g.home_team_id, g.away_team_id
+        SELECT g.id, g.game_date, g.scheduled_start, g.season_type, g.home_team_id, g.away_team_id
         FROM games g
         WHERE g.season = 2027
           AND g.status IN ('scheduled','pre-game','pregame')
