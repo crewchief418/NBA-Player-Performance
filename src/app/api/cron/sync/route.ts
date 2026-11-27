@@ -514,10 +514,10 @@ export async function GET(request: NextRequest) {
         FROM player_game_stats pgs
         JOIN games g ON g.id=pgs.game_id
         CROSS JOIN LATERAL (VALUES
-          ('points',pgs.points),('rebounds',pgs.rebounds),('assists',pgs.assists),
-          ('threes_made',pgs.threes_made),('steals',pgs.steals),('blocks',pgs.blocks),
-          ('pra',pgs.points+pgs.rebounds+pgs.assists),('pr',pgs.points+pgs.rebounds),
-          ('pa',pgs.points+pgs.assists),('ra',pgs.rebounds+pgs.assists)
+          ('player_points',pgs.points),('player_rebounds',pgs.rebounds),('player_assists',pgs.assists),
+          ('player_threes',pgs.threes_made),('player_steals',pgs.steals),('player_blocks',pgs.blocks),
+          ('player_points_rebounds_assists',pgs.points+pgs.rebounds+pgs.assists),('player_points_rebounds',pgs.points+pgs.rebounds),
+          ('player_points_assists',pgs.points+pgs.assists),('player_rebounds_assists',pgs.rebounds+pgs.assists)
         ) v(market_key,actual_value)
         WHERE g.status='final' AND g.game_date>=CURRENT_DATE-INTERVAL '30 days'
           AND v.actual_value IS NOT NULL
