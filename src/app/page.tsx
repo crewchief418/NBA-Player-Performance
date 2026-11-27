@@ -90,6 +90,7 @@ export default function Home() {
   const [search,setSearch] = useState("");
   const [selectedDate,setSelectedDate] = useState("all");
   const [modelMenuOpen,setModelMenuOpen] = useState(false);
+  const [expandedGames,setExpandedGames] = useState<Record<number,boolean>>({});
   const [installPrompt,setInstallPrompt] = useState<any>(null);
 
   useEffect(() => {
@@ -172,7 +173,7 @@ export default function Home() {
       <div className="date-filter"><button className={selectedDate==="all"?"selected":""} onClick={()=>setSelectedDate("all")}>ALL GAMES</button>{dates.map(d=><button key={d.key} className={selectedDate===d.key?"selected":""} onClick={()=>setSelectedDate(d.key)}>{dateLabel(d.value,{weekday:"short",month:"short",day:"numeric"}).toUpperCase()}</button>)}</div>
       {loading ? <div className="loading-state"><div className="loader"/>Building the player board…</div>
       : games.length ? <div className="game-list">{games.map(game=><section className="game-card" key={game.gameId}>
-        <div className="game-header">
+        <button type="button" className="game-header game-header-toggle" onClick={()=>setExpandedGames(v=>({...v,[game.gameId]:!v[game.gameId]}))} aria-expanded={!!expandedGames[game.gameId]}>
           <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span></div>
           <div className="matchup">
             <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span></div></div>
@@ -180,8 +181,9 @@ export default function Home() {
             <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span></div></div>
           </div>
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span></div>
-        </div>
-        <div className="player-list">{game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>
+          <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
+        </button>
+        {expandedGames[game.gameId] && <div className="player-list">{game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>
       </section>)}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
