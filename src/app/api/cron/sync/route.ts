@@ -107,6 +107,129 @@ async function mapLimit<T,U>(items: T[], limit: number, fn: (item:T)=>Promise<U>
   return results;
 }
 
+function normalizeInjuryStatus(value: unknown): string {
+  const s = String(value ?? "").trim().toUpperCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
+  if (s.includes("OUT") || s.includes("INACTIVE")) return "OUT";
+  if (s.includes("DOUBTFUL")) return "DOUBTFUL";
+  if (s.includes("QUESTIONABLE")) return "QUESTIONABLE";
+  if (s.includes("DAY TO DAY") || s === "DTD") return "DAY-TO-DAY";
+  if (s.includes("PROBABLE")) return "PROBABLE";
+  if (s.includes("AVAILABLE") || s.includes("ACTIVE")) return "AVAILABLE";
+  return s || "UNKNOWN";
+}
+
+function collectDepthEntries(root: any) {
+  const found: Array<{playerId:string; rank:number; position:string}> = [];
+  const seen = new Set<string>();
+  const walk = (node: any, inheritedPosition = "") => {
+    if (!node || typeof node !== "object") return;
+    if (Array.isArray(node)) { for (const item of node) walk(item, inheritedPosition); return; }
+    const posValue = node.position?.displayName ?? node.position?.name ?? node.position?.abbreviation
+      ?? (typeof node.position === "string" ? node.position : "")
+      ?? node.positionName ?? node.abbreviation ?? "";
+    const position = String(posValue || inheritedPosition || node.name || "");
+    const athlete = node.athlete ?? node.player;
+    const id = athlete?.id ?? node.athleteId ?? node.playerId;
+    const rankValue = node.rank ?? node.depth ?? node.order;
+    const rank = Number(rankValue);
+    if (id !== undefined && Number.isFinite(rank) && rank > 0 && rank <= 20) {
+      const key = String(id) + ":" + position;
+      if (!seen.has(key)) {
+        seen.add(key);
+        found.push({playerId:String(id),rank,position:position.slice(0,80)});
+      }
+    }
+    for (const [key,value] of Object.entries(node)) {
+      if (key === "athlete" || key === "player") continue;
+      const nextPosition = /position|depthchart/i.test(key) ? position : (position || inheritedPosition);
+      if (value && typeof value === "object") walk(value,nextPosition);
+    }
+  };
+  walk(root?.depthchart ?? root?.depthChart ?? root);
+  return found;
+}
+
+async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:string}>, teamDb: Map<string,number>) {
+  const failures: string[] = [];
+  let injuryRows = 0, depthRows = 0;
+  try {
+    const payload = await espn("/injuries");
+    const groups = Array.isArray(payload?.injuries) ? payload.injuries : null;
+    if (!groups || payload?.status === "error") throw new Error("ESPN injury feed did not return a valid injuries array");
+    const current = new Date();
+    const reportDate = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(current);
+    const entries: any[] = [];
+    for (const group of groups) {
+      const teamAbbr = CANON[String(group.team?.abbreviation ?? "")] ?? String(group.team?.abbreviation ?? "");
+      const teamId = teamDb.get(teamAbbr);
+      for (const item of (group.injuries ?? [])) {
+        const athlete = item.athlete ?? {};
+        const playerProviderId = String(athlete.id ?? "");
+        if (!playerProviderId) continue;
+        entries.push({playerProviderId,teamId,status:normalizeInjuryStatus(item.status ?? item.type?.name),
+          injury:String(item.longComment ?? item.shortComment ?? item.details ?? item.detail ?? item.type?.description ?? item.type?.name ?? "Injury report"),
+          raw:item});
+      }
+    }
+    // A valid league-wide feed is a complete current snapshot; first clear today's ESPN statuses,
+    // then apply the players ESPN currently lists. If ESPN reports no injuries, this correctly
+    // leaves today's players available rather than retaining stale reports from earlier runs.
+    await pool.query(
+      "UPDATE injury_reports SET status='AVAILABLE',injury=NULL,captured_at=now() WHERE report_date=$1 AND source='espn'",
+      [reportDate]
+    );
+    for (const item of entries) {
+      const player = await pool.query(
+        "SELECT id FROM players WHERE provider='espn' AND provider_player_id=$1 LIMIT 1",
+        [item.playerProviderId]
+      );
+      if (!player.rowCount) continue;
+      await pool.query(
+        `INSERT INTO injury_reports(player_id,team_id,report_date,status,injury,source,captured_at,raw_report)
+         VALUES($1,$2,$3,$4,$5,'espn',now(),$6::jsonb)
+         ON CONFLICT(player_id,report_date,source) DO UPDATE SET
+           team_id=EXCLUDED.team_id,status=EXCLUDED.status,injury=EXCLUDED.injury,
+           captured_at=now(),raw_report=EXCLUDED.raw_report`,
+        [player.rows[0].id,item.teamId,reportDate,item.status,item.injury,JSON.stringify(item.raw)]
+      );
+      injuryRows++;
+    }
+  } catch (error) {
+    failures.push("Injuries: " + (error instanceof Error ? error.message : String(error)));
+  }
+
+  try {
+    const charts = await mapLimit(teamRows,5,async team => ({
+      team,
+      payload: await espn(`/teams/${team.id}/depthcharts`)
+    }));
+    const allEntries = charts.flatMap(({team,payload}) =>
+      collectDepthEntries(payload).map(entry => ({...entry,team}))
+    );
+    if (charts.length !== 30 || allEntries.length < 60) {
+      throw new Error(`Depth chart feed incomplete (${allEntries.length} player-position entries); existing roles preserved`);
+    }
+    // Replace only after all 30 team charts produced a meaningful combined snapshot.
+    await pool.query(
+      `UPDATE players SET metadata=metadata-'depth_chart_rank'-'depth_chart_position'-'depth_chart_updated_at'-'depth_chart_source'
+       WHERE provider='espn'`
+    );
+    for (const entry of allEntries) {
+      const team = entry.team;
+      await pool.query(
+        `UPDATE players SET metadata=metadata || $1::jsonb,updated_at=now()
+         WHERE provider='espn' AND provider_player_id=$2`,
+        [JSON.stringify({depth_chart_rank:String(entry.rank),depth_chart_position:entry.position,
+          depth_chart_updated_at:new Date().toISOString(),depth_chart_source:"espn"}),entry.playerId]
+      );
+      depthRows++;
+    }
+  } catch (error) {
+    failures.push("Depth charts: " + (error instanceof Error ? error.message : String(error)));
+  }
+  return {injuryRows,depthRows,failures};
+}
+
 async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gameDb: Map<string, number>) {
   const summary = await espn("/summary", { event: event.id });
   const gameId = gameDb.get(event.id);
@@ -340,6 +463,9 @@ export async function GET(request: NextRequest) {
       [rosterIds]
     );
 
+    const availability = await syncAvailabilityAndDepth(teamRows,teamDb);
+    failures.push(...availability.failures);
+
     // Settle saved forecasts against ESPN box scores so real model performance is tracked.
     await pool.query(`
       WITH actuals AS (
@@ -387,7 +513,7 @@ export async function GET(request: NextRequest) {
       [startedAt, failures.length ? "completed_with_errors" : "completed",
        recordsReceived, recordsWritten, failures.length ? failures.slice(0,20).join("\n") : null,
        JSON.stringify({season:SEASON,games:gamesWritten,boxscores_imported:boxscoresImported,
-         player_game_rows:playerRowsWritten,roster_players:rosterPlayers,failures:failures.length})]
+         player_game_rows:playerRowsWritten,roster_players:rosterPlayers,injury_rows:availability.injuryRows,depth_chart_entries:availability.depthRows,failures:failures.length})]
     );
 
     return NextResponse.json({
