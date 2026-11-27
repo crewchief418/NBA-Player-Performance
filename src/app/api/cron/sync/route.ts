@@ -109,7 +109,7 @@ async function mapLimit<T,U>(items: T[], limit: number, fn: (item:T)=>Promise<U>
 
 function normalizeInjuryStatus(value: unknown): string {
   const s = String(value ?? "").trim().toUpperCase().replace(/[_-]+/g, " ").replace(/\\s+/g, " ");
-  if (s.includes("OUT") || s.includes("INACTIVE")) return "OUT";
+  if (s.includes("OUT") || s.includes("INACTIVE") || s.includes("INJURED RESERVE") || s === "IR") return "OUT";
   if (s.includes("DOUBTFUL")) return "DOUBTFUL";
   if (s.includes("QUESTIONABLE")) return "QUESTIONABLE";
   if (s.includes("DAY TO DAY") || s === "DTD") return "DAY-TO-DAY";
