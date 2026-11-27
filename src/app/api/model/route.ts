@@ -161,7 +161,8 @@ export async function GET() {
     return NextResponse.json({
       model:{name:"COURTSIDE performance model",version:"2.0.0"},
       backtest:{method:"Walk-forward: each game is predicted using only the player's previous eight regular-season appearances and the opponent's previous eight team games.",metrics:result.rows},
-      data:{...coverage.rows[0],injury_history_available:false},\n      savedForecasts:gradedForecasts.rows,
+      data:{...coverage.rows[0],injury_history_available:false},
+      savedForecasts:gradedForecasts.rows,
       features:[
         {name:"Recent form",status:"active",detail:"Recency-weighted last-eight per-minute production blended with current-season rates."},
         {name:"Minutes and role",status:"active",detail:"Recent minutes, last-three trend, starter frequency and workload adjustments."},
