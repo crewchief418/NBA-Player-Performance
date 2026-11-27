@@ -244,7 +244,11 @@ export async function GET(request: NextRequest) {
       const homeId = teamDb.get(homeAbbr), awayId = teamDb.get(awayAbbr);
       if (!homeId || !awayId) { failures.push(`Unknown teams for game ${event.id}`); continue; }
       const start = new Date(event.date);
-      const status = event.completed ? "final" : "scheduled";
+      const status = event.completed ? "final"
+        : event.status_name === "STATUS_SCHEDULED" ? "scheduled"
+        : event.status_name?.includes("POSTPONED") ? "postponed"
+        : event.status_name?.includes("CANCEL") ? "cancelled"
+        : "in_progress";
       const homeScore = event.completed ? numeric(home.score) : null;
       const awayScore = event.completed ? numeric(away.score) : null;
       const metadata = {
@@ -287,6 +291,7 @@ export async function GET(request: NextRequest) {
     const boxResults = await mapLimit(recentFinals, 3, async event => {
       try {
         const count = await importBoxscore(event, teamDb, gameDb);
+        if (count === 0) throw new Error("ESPN summary returned no player stat rows");
         return { ok:true, count };
       } catch (error) {
         failures.push(`Game ${event.id}: ${error instanceof Error ? error.message : String(error)}`);
