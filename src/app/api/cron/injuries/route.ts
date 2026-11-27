@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 const ESPN_INJURIES = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries";
+const TEAM_CANON: Record<string,string> = {GS:"GSW",NO:"NOP",NY:"NYK",PHX:"PHO",SA:"SAS",UTAH:"UTA",WSH:"WAS",BRK:"BKN",CHO:"CHA"};
 
 function reportDate() {
   return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(new Date());
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
     const date=reportDate();
     for(const teamEntry of teamEntries) {
       const teamAbbr=String(teamEntry.team?.abbreviation ?? teamEntry.abbreviation ?? "");
-      const teamId=teamIds.get(teamAbbr) ?? null;
+      const teamId=teamIds.get(TEAM_CANON[teamAbbr] ?? teamAbbr) ?? null;
       const injuries=teamEntry.injuries ?? [];
       for(const item of injuries) {
         const athlete=item.athlete ?? item.player ?? {};
