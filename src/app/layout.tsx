@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "Independent NBA player performance forecasts and model results.",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent", title: "COURTSIDE" },
-  icons: { icon: "/icon.svg", shortcut: "/icon.svg", apple: "/icon.svg" }
+  icons: { icon: "/icon.svg", shortcut: "/icon.svg", apple: "/apple-touch-icon.png" }
 };
 
 export const viewport: Viewport = { themeColor: "#090d12" };
