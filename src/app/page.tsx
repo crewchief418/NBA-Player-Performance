@@ -4,22 +4,87 @@ import { useEffect, useMemo, useState } from "react";
 
 type Status = { connected: boolean; counts?: Record<string, number>; error?: string };
 type Projection = {
-  player_id: number; full_name: string; position: string | null; game_date: string;
+  player_id: number; game_id: number; espn_id?: string | null; full_name: string;
+  position: string | null; game_date: string; scheduled_start?: string | null;
   home_team: string; away_team: string; sample_size: number; avg_minutes: string;
   points: string; rebounds: string; assists: string; threes_made: string;
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
 };
-const statOptions = [
-  ["points","PTS"],["rebounds","REB"],["assists","AST"],["threes_made","3PM"],
-  ["steals","STL"],["blocks","BLK"],["pra","PRA"],["pr","PR"],["pa","PA"],["ra","RA"]
+type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
+
+const stats = [
+  ["points","PTS"],["rebounds","REB"],["assists","AST"],
+  ["threes_made","3PM"],["steals","STL"],["blocks","BLK"]
 ] as const;
+const combos = [["pra","PRA"],["pr","P+R"],["pa","P+A"],["ra","R+A"]] as const;
+const teamNames: Record<string,string> = {
+  ATL:"Atlanta Hawks",BOS:"Boston Celtics",BKN:"Brooklyn Nets",CHA:"Charlotte Hornets",
+  CHI:"Chicago Bulls",CLE:"Cleveland Cavaliers",DAL:"Dallas Mavericks",DEN:"Denver Nuggets",
+  DET:"Detroit Pistons",GSW:"Golden State Warriors",HOU:"Houston Rockets",IND:"Indiana Pacers",
+  LAC:"LA Clippers",LAL:"Los Angeles Lakers",MEM:"Memphis Grizzlies",MIA:"Miami Heat",
+  MIL:"Milwaukee Bucks",MIN:"Minnesota Timberwolves",NOP:"New Orleans Pelicans",NYK:"New York Knicks",
+  OKC:"Oklahoma City Thunder",ORL:"Orlando Magic",PHI:"Philadelphia 76ers",PHO:"Phoenix Suns",
+  POR:"Portland Trail Blazers",SAC:"Sacramento Kings",SAS:"San Antonio Spurs",TOR:"Toronto Raptors",
+  UTA:"Utah Jazz",WAS:"Washington Wizards"
+};
+const logoCode: Record<string,string> = {GSW:"gs",NOP:"no",NYK:"ny",PHO:"phx",SAS:"sa",UTA:"utah",WAS:"wsh",BKN:"bkn",CHA:"cha",LAC:"lac"};
+
+function safeDate(value: string) {
+  if (!value) return null;
+  const dateOnly = value.slice(0,10);
+  const parsed = new Date(dateOnly + "T12:00:00");
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+function dateLabel(value: string, options: Intl.DateTimeFormatOptions) {
+  const date = safeDate(value);
+  return date ? new Intl.DateTimeFormat("en-US", { timeZone:"America/New_York", ...options }).format(date) : "Date TBA";
+}
+function tipoffLabel(value?: string | null) {
+  if (!value) return "TIME TBA";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "TIME TBA" : new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"}).format(date);
+}
+function TeamMark({abbr,large=false}:{abbr:string;large?:boolean}) {
+  const [failed,setFailed] = useState(false);
+  const code = logoCode[abbr] ?? abbr.toLowerCase();
+  return <div className={large ? "team-mark large" : "team-mark"}>
+    {!failed ? <img src={`https://a.espncdn.com/i/teamlogos/nba/500/${code}.png`} alt="" onError={()=>setFailed(true)}/> : <span>{abbr}</span>}
+  </div>;
+}
+function PlayerCard({player}:{player:Projection}) {
+  const [expanded,setExpanded] = useState(false);
+  const [headshotFailed,setHeadshotFailed] = useState(false);
+  return <article className={expanded ? "player-card expanded" : "player-card"}>
+    <button className="player-main" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>
+      <div className="player-identity">
+        <div className="headshot">
+          {player.espn_id && !headshotFailed
+            ? <img src={`https://a.espncdn.com/i/headshots/nba/players/full/${player.espn_id}.png`} alt="" onError={()=>setHeadshotFailed(true)}/>
+            : <span>{player.full_name.split(" ").map(x=>x[0]).slice(0,2).join("")}</span>}
+        </div>
+        <div className="player-name"><strong>{player.full_name}</strong><span>{player.position || "PLAYER"} <i/> {player.avg_minutes || "—"} MIN AVG</span></div>
+      </div>
+      <div className="primary-stat"><strong>{player.points}</strong><span>PTS</span></div>
+      <div className="primary-stat"><strong>{player.rebounds}</strong><span>REB</span></div>
+      <div className="primary-stat"><strong>{player.assists}</strong><span>AST</span></div>
+      <div className="primary-stat secondary"><strong>{player.pra}</strong><span>PRA</span></div>
+      <div className="expand-indicator">{expanded ? "−" : "+"}</div>
+    </button>
+    {expanded && <div className="player-details">
+      <div className="detail-heading"><span>RECENT FORM BASELINE</span><b>{player.sample_size} GAME SAMPLE</b></div>
+      <div className="stat-grid">{stats.map(([key,label])=><div className="stat-tile" key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
+      <div className="combo-row">{combos.map(([key,label])=><div key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
+      <p className="detail-note">Projection is the unweighted average of the player’s last {player.sample_size} regular-season appearances. Role, matchup and availability adjustments are not yet applied.</p>
+    </div>}
+  </article>;
+}
 
 export default function Home() {
   const [status,setStatus] = useState<Status | null>(null);
   const [rows,setRows] = useState<Projection[]>([]);
   const [loading,setLoading] = useState(true);
   const [search,setSearch] = useState("");
-  const [stat,setStat] = useState<string>("points");
+  const [selectedDate,setSelectedDate] = useState("all");
 
   useEffect(() => {
     Promise.all([
@@ -31,37 +96,64 @@ export default function Home() {
   },[]);
 
   const filtered = useMemo(()=>rows.filter(r=>r.full_name.toLowerCase().includes(search.toLowerCase())),[rows,search]);
+  const games = useMemo(()=>{
+    const map = new Map<number,GameGroup>();
+    filtered.forEach(p=>{
+      if(selectedDate !== "all" && p.game_date.slice(0,10) !== selectedDate) return;
+      if(!map.has(p.game_id)) map.set(p.game_id,{gameId:p.game_id,date:p.game_date,tipoff:p.scheduled_start,home:p.home_team,away:p.away_team,players:[]});
+      map.get(p.game_id)!.players.push(p);
+    });
+    return [...map.values()].sort((a,b)=>a.date.localeCompare(b.date) || String(a.tipoff).localeCompare(String(b.tipoff)));
+  },[filtered,selectedDate]);
+  const dates = useMemo(()=>[...new Map(rows.map(r=>[r.game_date.slice(0,10),r.game_date])).entries()].map(([key,value])=>({key,value})).sort((a,b)=>a.key.localeCompare(b.key)),[rows]);
   const counts = status?.counts ?? {};
-  const fmtDate = (d:string) => new Date(d+"T12:00:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
-  return <main className="shell">
-    <aside className="sidebar">
-      <div className="brand"><div className="brand-mark">N</div><div><strong>COURTSIDE</strong><span>PLAYER MODEL</span></div></div>
-      <div className="nav-label">WORKSPACE</div>
-      <a className="nav-item active">◫ <span>Projections</span></a>
-      <a className="nav-item">▤ <span>Player Explorer</span></a>
-      <a className="nav-item">◷ <span>Model Performance</span></a>
-      <a className="nav-item">⌁ <span>Data & Imports</span></a>
-      <div className="sidebar-bottom"><span className="status-dot"></span> Database {status?.connected ? "connected" : "connecting"}</div>
-    </aside>
-    <section className="main">
-      <header className="topbar"><div><span className="eyebrow">NBA ANALYTICS / PLAYER MODEL</span><h1>Player projections</h1></div><div className="top-right"><span className="live-pill"><i/> MODEL WORKSPACE</span><div className="avatar">M</div></div></header>
-      <div className="intro"><div><h2>Performance, not market lines.</h2><p>Independent statistical projections built from player game history, role, minutes and matchup context.</p></div><div className="date-chip">2026–27 SEASON</div></div>
-      <div className="metric-grid">
-        <Metric label="PLAYERS IN DATABASE" value={counts.players ?? "—"} note="Unique player records"/>
-        <Metric label="GAMES LOADED" value={counts.games ?? "—"} note="Schedule and results"/>
-        <Metric label="PLAYER GAME LOGS" value={counts.player_game_stats ?? "—"} note="Historical stat records"/>
-        <Metric label="MODEL PROJECTIONS" value={counts.projections ?? "—"} note="Saved model outputs"/>
-      </div>
-      <div className="panel">
-        <div className="panel-head"><div><span className="eyebrow">UPCOMING SLATE</span><h3>Player stat forecasts</h3><p>Initial baseline uses each player's most recent eight regular-season games.</p></div><span className="tag">BASELINE MODEL · V0.1</span></div>
-        <div className="filters"><input aria-label="Search players" placeholder="Search player..." value={search} onChange={e=>setSearch(e.target.value)}/><select aria-label="Stat market" value={stat} onChange={e=>setStat(e.target.value)}>{statOptions.map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></div>
-        {loading ? <div className="empty">Loading player data…</div> : filtered.length ? <div className="table-wrap"><table><thead><tr><th>PLAYER</th><th>GAME</th><th>DATE</th><th>MIN / AVG</th><th>PROJECTION</th><th>SAMPLE</th></tr></thead><tbody>{filtered.map((r,i)=><tr key={r.player_id+"-"+r.game_date+"-"+i}><td><strong>{r.full_name}</strong><small>{r.position ?? "—"}</small></td><td>{r.away_team} @ {r.home_team}</td><td>{fmtDate(r.game_date)}</td><td>{r.avg_minutes ?? "—"}</td><td className="projection">{r[stat as keyof Projection] ?? "—"} <small>{statOptions.find(x=>x[0]===stat)?.[1]}</small></td><td><span className="sample">{r.sample_size} G</span></td></tr>)}</tbody></table></div> : <div className="empty"><div className="empty-icon">◎</div><strong>{rows.length ? "No matching players" : "Your data pipeline is next"}</strong><p>{rows.length ? "Try another player name." : "The database is connected, but no player game logs or upcoming schedule have been imported yet. Next we'll build the historical Basketball Reference importer."}</p></div>}
-      </div>
-      <footer>COURTSIDE PLAYER MODEL <span>Independent projections · No sportsbook feeds</span></footer>
-    </section>
-  </main>;
-}
+  const totalPlayers = new Set(filtered.map(r=>r.player_id)).size;
 
-function Metric({label,value,note}:{label:string;value:number|string;note:string}) {
-  return <div className="metric"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+  return <main className="app-shell">
+    <header className="top-nav">
+      <a className="brand" href="#"><span className="brand-icon">C</span><span><b>COURTSIDE</b><small>PLAYER PERFORMANCE MODEL</small></span></a>
+      <nav><a className="nav-active">Projections</a><a>Player profiles</a><a>Model lab</a></nav>
+      <div className="nav-status"><i/> LIVE DATASET <span className="season-pill">2026–27</span></div>
+    </header>
+
+    <section className="hero">
+      <div className="hero-copy">
+        <div className="kicker"><span/> THE DAILY BOARD <span className="kicker-line"/></div>
+        <h1>Know the player.<br/><em>Know the performance.</em></h1>
+        <p>Independent NBA player forecasts built from game history, minutes and statistical trends. No sportsbook lines. No market influence.</p>
+        <div className="hero-foot"><span className="hero-dot"/> {loading ? "UPDATING THE BOARD" : `${totalPlayers} PLAYERS ON THE BOARD`} <span className="hero-separator"/> {games.length} MATCHUPS</div>
+      </div>
+      <div className="hero-art" aria-hidden="true"><div className="orbit orbit-one"/><div className="orbit orbit-two"/><div className="ball"><div className="ball-lines"/></div><span className="art-label">PURE<br/>PERFORMANCE</span><span className="art-number">01 / 27</span></div>
+    </section>
+
+    <section className="overview-strip">
+      <div><span>PLAYER DATABASE</span><strong>{counts.players?.toLocaleString?.() ?? "—"}</strong><small>PLAYER PROFILES</small></div>
+      <div><span>GAME HISTORY</span><strong>{counts.player_game_stats?.toLocaleString?.() ?? "—"}</strong><small>PLAYER BOX SCORES</small></div>
+      <div><span>GAMES TRACKED</span><strong>{counts.games?.toLocaleString?.() ?? "—"}</strong><small>2021–22 TO PRESENT</small></div>
+      <div className="model-status"><span>MODEL STATUS</span><strong><i/> BASELINE ACTIVE</strong><small>LAST 8 APPEARANCES</small></div>
+    </section>
+
+    <section className="board-section">
+      <div className="section-heading">
+        <div><div className="kicker">ON THE COURT</div><h2>Upcoming matchups</h2><p>Explore player forecasts by game. Tap any player to open the full stat profile.</p></div>
+        <div className="board-controls"><label className="search-box"><span>⌕</span><input aria-label="Search players" placeholder="Find a player" value={search} onChange={e=>setSearch(e.target.value)}/></label></div>
+      </div>
+      <div className="date-filter"><button className={selectedDate==="all"?"selected":""} onClick={()=>setSelectedDate("all")}>ALL GAMES</button>{dates.map(d=><button key={d.key} className={selectedDate===d.key?"selected":""} onClick={()=>setSelectedDate(d.key)}>{dateLabel(d.value,{weekday:"short",month:"short",day:"numeric"}).toUpperCase()}</button>)}</div>
+      {loading ? <div className="loading-state"><div className="loader"/>Building the player board…</div>
+      : games.length ? <div className="game-list">{games.map(game=><section className="game-card" key={game.gameId}>
+        <div className="game-header">
+          <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span></div>
+          <div className="matchup">
+            <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span></div></div>
+            <span className="at-symbol">@</span>
+            <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span></div></div>
+          </div>
+          <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span></div>
+        </div>
+        <div className="player-list">{game.players.sort((a,b)=>a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>
+      </section>)}</div>
+      : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
+    </section>
+    <footer className="site-footer"><span>COURTSIDE <b>PLAYER PERFORMANCE MODEL</b></span><span>INDEPENDENT FORECASTS · BUILT ON PLAYER HISTORY</span></footer>
+  </main>;
 }
