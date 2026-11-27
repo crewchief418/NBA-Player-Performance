@@ -10,7 +10,7 @@ type Projection = {
   home_team: string; away_team: string; sample_size: number; avg_minutes: string;
   points: string; rebounds: string; assists: string; threes_made: string;
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
-  starter_probability?: string; injury_status?: string; injury_detail?: string; rest_days?: number;
+  starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
 
@@ -73,10 +73,10 @@ function PlayerCard({player}:{player:Projection}) {
       <div className="expand-indicator">{expanded ? "−" : "+"}</div>
     </button>
     {expanded && <div className="player-details">
-      <div className="detail-heading"><span>RECENT FORM BASELINE</span><b>{player.sample_size} GAME SAMPLE</b></div>
+      <div className="detail-heading"><span>MODEL-ADJUSTED FORECAST</span><b>{player.sample_size} GAME SAMPLE</b></div>
       <div className="stat-grid">{stats.map(([key,label])=><div className="stat-tile" key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
       <div className="combo-row">{combos.map(([key,label])=><div key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
-      <div className="player-context"><span>PROJECTED MINUTES <b>{player.avg_minutes}</b></span><span>STARTER RATE <b>{player.starter_probability ?? "—"}%</b></span><span>REST <b>{player.rest_days == null ? "—" : `${player.rest_days}D`}</b></span>{player.injury_status && <span>AVAILABILITY <b>{player.injury_status}</b></span>}</div>
+      <div className="player-context"><span>PROJECTED MINUTES <b>{player.avg_minutes}</b></span><span>STARTER RATE <b>{player.starter_probability ?? "—"}%</b></span><span>DEPTH <b>{player.depth_chart_rank ? `#${player.depth_chart_rank} ${player.depth_chart_position ?? ""}` : "—"}</b></span><span>REST <b>{player.rest_days == null ? "—" : `${player.rest_days}D`}</b></span>{player.injury_status && <span>AVAILABILITY <b>{player.injury_status}</b></span>}</div>
       <p className="detail-note">Minutes-first forecast using recency-weighted production, current-season form, opponent defense, estimated pace, venue splits and rest. Current ESPN availability reports are applied when available.</p>
     </div>}
   </article>;
