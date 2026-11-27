@@ -79,7 +79,8 @@ export async function GET(request: NextRequest) {
         if(!player.rowCount) { unmatched++; continue; }
         const status=normalizeStatus(item.status?.name ?? item.status ?? item.fantasy?.status);
         const injury=String(item.longComment ?? item.shortComment ?? item.detail ?? item.details?.type ?? item.type?.description ?? item.type?.name ?? "Undisclosed").slice(0,500);
-        const returnDate=item.details?.returnDate ?? item.expectedReturnDate ?? item.expectedReturn ?? null;
+        const rawReturnDate=item.details?.returnDate ?? item.expectedReturnDate ?? item.expectedReturn ?? null;
+        const returnDate=rawReturnDate ? String(rawReturnDate).slice(0,10) : null;
         await pool.query(
           `INSERT INTO injury_reports(player_id,team_id,report_date,status,injury,expected_return,source,raw_report,captured_at)
            VALUES($1,$2,$3,$4,$5,$6,'espn',$7::jsonb,now())
