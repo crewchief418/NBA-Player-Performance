@@ -183,7 +183,7 @@ export default function Home() {
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span></div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
-        {expandedGames[game.gameId] && <div className="player-list">{game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>
+        {expandedGames[game.gameId] && <div className="player-list">{game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>}
       </section>)}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
