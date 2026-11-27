@@ -25,6 +25,15 @@ const stats = [
   ["threes_made","3PM"],["steals","STL"],["blocks","BLK"]
 ] as const;
 const combos = [["pra","PRA"],["pr","P+R"],["pa","P+A"],["ra","R+A"]] as const;
+const EDGE_THRESHOLDS: Record<string,number> = {
+  "points":2.5,
+  "rebounds":1.0,
+  "assists":1.0,
+  "3-pointers made":0.5,
+  "steals":0.5,
+  "blocks":0.5,
+  "points + rebounds + assists":3.5
+};
 const teamNames: Record<string,string> = {
   ATL:"Atlanta Hawks",BOS:"Boston Celtics",BKN:"Brooklyn Nets",CHA:"Charlotte Hornets",
   CHI:"Chicago Bulls",CLE:"Cleveland Cavaliers",DAL:"Dallas Mavericks",DEN:"Denver Nuggets",
@@ -69,6 +78,11 @@ function PlayerCard({player,vegasLines}:{player:Projection;vegasLines:VegasLine[
         && String(line.game_date).slice(0,10) === String(player.game_date).slice(0,10)
   );
   const marketGroups = [...new Set(playerLines.map(line=>line.market_name))];
+  const hasQualifiedEdge = playerLines.some(line => {
+    const threshold=EDGE_THRESHOLDS[line.market_name.trim().toLowerCase()];
+    const edge=Math.abs(Number(line.edge));
+    return threshold !== undefined && Number.isFinite(edge) && edge >= threshold;
+  });
   return <article className={expanded ? "player-card expanded" : "player-card"}>
     <button className="player-main" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>
       <div className="player-identity">
@@ -77,7 +91,7 @@ function PlayerCard({player,vegasLines}:{player:Projection;vegasLines:VegasLine[
             ? <img src={`https://a.espncdn.com/i/headshots/nba/players/full/${player.espn_id}.png`} alt="" onError={()=>setHeadshotFailed(true)}/>
             : <span>{player.full_name.split(" ").map(x=>x[0]).slice(0,2).join("")}</span>}
         </div>
-        <div className="player-name"><strong>{player.full_name} {player.injury_designator && <em className={`injury-tag injury-${player.injury_designator.toLowerCase()}`} title={`${player.injury_status}${player.injury_detail ? ` — ${player.injury_detail}` : ""}`}>{player.injury_designator}</em>}</strong><span>{player.position || "PLAYER"} <i/> {player.avg_minutes || "—"} MIN AVG</span><small className="player-team"><TeamMark abbr={player.roster_team || "NBA"}/> <b>{teamNames[player.roster_team || ""] || player.roster_team || "TEAM TBD"}</b></small></div>
+        <div className={hasQualifiedEdge ? "player-name threshold-hit" : "player-name"}><strong>{player.full_name} {player.injury_designator && <em className={`injury-tag injury-${player.injury_designator.toLowerCase()}`} title={`${player.injury_status}${player.injury_detail ? ` — ${player.injury_detail}` : ""}`}>{player.injury_designator}</em>}</strong><span>{player.position || "PLAYER"} <i/> {player.avg_minutes || "—"} MIN AVG</span><small className="player-team"><TeamMark abbr={player.roster_team || "NBA"}/> <b>{teamNames[player.roster_team || ""] || player.roster_team || "TEAM TBD"}</b></small></div>
       </div>
       <div className="primary-stat"><strong>{player.points}</strong><span>PTS</span></div>
       <div className="primary-stat"><strong>{player.rebounds}</strong><span>REB</span></div>
@@ -95,12 +109,17 @@ function PlayerCard({player,vegasLines}:{player:Projection;vegasLines:VegasLine[
         {playerLines.length ? marketGroups.map(market=>{
           const marketLines=playerLines.filter(line=>line.market_name===market);
           const modelValue=Number(marketLines[0].projected_mean);
+          const marketThreshold=EDGE_THRESHOLDS[market.trim().toLowerCase()];
+          const thresholdHit=marketThreshold !== undefined && marketLines.some(line => {
+            const edge=Math.abs(Number(line.edge));
+            return Number.isFinite(edge) && edge >= marketThreshold;
+          });
           return <section className="player-market-group" key={market}>
-            <div className="player-market-title"><strong>{market}</strong><span>COURTSIDE <b>{modelValue.toFixed(1)}</b></span></div>
+            <div className={thresholdHit ? "player-market-title threshold-hit" : "player-market-title"}><strong>{market}</strong>{marketThreshold !== undefined && <em className={thresholdHit ? "threshold-indicator active" : "threshold-indicator"}>{thresholdHit ? "THRESHOLD HIT" : `±${marketThreshold.toFixed(1)} REQUIRED`}</em>}<span>COURTSIDE <b>{modelValue.toFixed(1)}</b></span></div>
             <div className="player-book-list">{marketLines.map((line,index)=><div className="player-book-line" key={line.sportsbook_name+"-"+line.line+"-"+index}>
               <div className="book-name">{line.sportsbook_name}<small>{line.injury_status ?? "UNREPORTED"}{line.injury_detail ? " · "+line.injury_detail : ""}</small></div>
               <div className="book-number"><span>LINE</span><strong>{Number(line.line).toFixed(1)}</strong><small>O {line.over_odds ?? "—"} / U {line.under_odds ?? "—"}</small></div>
-              <div className={"book-edge "+(Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":"")}><span>MODEL EDGE</span><strong>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)}</strong><small>{Number(line.edge)>0?"HIGHER":Number(line.edge)<0?"LOWER":"EVEN"}</small></div>
+              <div className={"book-edge "+(Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":"")+(marketThreshold !== undefined && Number.isFinite(Math.abs(Number(line.edge))) && Math.abs(Number(line.edge))>=marketThreshold?" threshold-met":"")}><span>MODEL EDGE</span><strong>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)}</strong><small>{Number(line.edge)>0?"HIGHER":Number(line.edge)<0?"LOWER":"EVEN"}</small></div>
             </div>)}</div>
           </section>;
         }) : <p className="player-vegas-empty">No matched sportsbook lines for this player yet. Lines appear here after the daily Vegas update and when a saved Courtside projection is available.</p>}
