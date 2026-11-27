@@ -59,9 +59,11 @@ function TeamMark({abbr,large=false}:{abbr:string;large?:boolean}) {
     {!failed ? <img src={`https://a.espncdn.com/i/teamlogos/nba/500/${code}.png`} alt="" onError={()=>setFailed(true)}/> : <span>{abbr}</span>}
   </div>;
 }
-function PlayerCard({player}:{player:Projection}) {
+function PlayerCard({player,vegasLines}:{player:Projection;vegasLines:VegasLine[]}) {
   const [expanded,setExpanded] = useState(false);
   const [headshotFailed,setHeadshotFailed] = useState(false);
+  const playerLines = vegasLines.filter(line => line.full_name.trim().toLowerCase() === player.full_name.trim().toLowerCase() && line.game_date.slice(0,10) === player.game_date.slice(0,10));
+  const marketGroups = [...new Set(playerLines.map(line=>line.market_name))];
   return <article className={expanded ? "player-card expanded" : "player-card"}>
     <button className="player-main" onClick={()=>setExpanded(v=>!v)} aria-expanded={expanded}>
       <div className="player-identity">
@@ -83,6 +85,22 @@ function PlayerCard({player}:{player:Projection}) {
       <div className="stat-grid">{stats.map(([key,label])=><div className="stat-tile" key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
       <div className="combo-row">{combos.map(([key,label])=><div key={key}><span>{label}</span><strong>{player[key]}</strong></div>)}</div>
       <div className="player-context"><span>PROJECTED MINUTES <b>{player.avg_minutes}</b></span><span>STARTER RATE <b>{player.starter_probability ?? "—"}%</b></span><span>DEPTH <b>{player.depth_chart_rank ? `#${player.depth_chart_rank} ${player.depth_chart_position ?? ""}` : "—"}</b></span><span>REST <b>{player.rest_days == null ? "—" : `${player.rest_days}D`}</b></span>{player.injury_status && <span>AVAILABILITY <b>{player.injury_status}</b></span>}</div>
+      <div className="player-vegas">
+        <div className="player-vegas-heading"><div><span className="kicker">MARKET COMPARISON</span><h3>Sportsbook lines</h3></div><span>{playerLines.length} LINES</span></div>
+        {playerLines.length ? marketGroups.map(market=>{
+          const marketLines=playerLines.filter(line=>line.market_name===market);
+          const modelValue=Number(marketLines[0].projected_mean);
+          return <section className="player-market-group" key={market}>
+            <div className="player-market-title"><strong>{market}</strong><span>COURTSIDE <b>{modelValue.toFixed(1)}</b></span></div>
+            <div className="player-book-list">{marketLines.map((line,index)=><div className="player-book-line" key={line.sportsbook_name+"-"+line.line+"-"+index}>
+              <div className="book-name">{line.sportsbook_name}<small>{line.injury_status ?? "UNREPORTED"}{line.injury_detail ? " · "+line.injury_detail : ""}</small></div>
+              <div className="book-number"><span>LINE</span><strong>{Number(line.line).toFixed(1)}</strong><small>O {line.over_odds ?? "—"} / U {line.under_odds ?? "—"}</small></div>
+              <div className={"book-edge "+(Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":"")}><span>MODEL EDGE</span><strong>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)}</strong><small>{Number(line.edge)>0?"HIGHER":Number(line.edge)<0?"LOWER":"EVEN"}</small></div>
+            </div>)}</div>
+          </section>;
+        }) : <p className="player-vegas-empty">No matched sportsbook lines for this player yet. Lines appear here after the daily Vegas update and when a saved Courtside projection is available.</p>}
+        <p className="player-vegas-note">Sportsbook data is a snapshot and may be delayed. OUT players are shown for reference; check availability before using any line.</p>
+      </div>
       <p className="detail-note">Minutes-first forecast using recency-weighted production, current-season form, opponent defense, estimated pace, venue splits and rest. Current ESPN availability reports are applied when available.</p>
     </div>}
   </article>;
@@ -142,39 +160,9 @@ export default function Home() {
   return <main className="app-shell">
     <header className="top-nav">
       <a className="brand" href="#"><img className="brand-icon-image" src="/icon.svg" alt="" /><span><b>COURTSIDE</b><small>PLAYER PERFORMANCE MODEL</small></span></a>
-      <nav><a className="nav-active" href="#projections">Projections</a><a href="#vegas-props">Vegas props</a><button className={modelMenuOpen ? "menu-trigger menu-trigger-active" : "menu-trigger"} onClick={()=>setModelMenuOpen(v=>!v)} aria-expanded={modelMenuOpen}>MODEL RESULTS <span>{modelMenuOpen ? "−" : "+"}</span></button></nav>
+      <nav><a className="nav-active" href="#projections">Projections</a><button className={modelMenuOpen ? "menu-trigger menu-trigger-active" : "menu-trigger"} onClick={()=>setModelMenuOpen(v=>!v)} aria-expanded={modelMenuOpen}>MODEL RESULTS <span>{modelMenuOpen ? "−" : "+"}</span></button></nav>
       <div className="nav-actions">{installPrompt && <button className="install-button" onClick={async()=>{await installPrompt.prompt();setInstallPrompt(null);}}>INSTALL APP</button>}<div className="nav-status"><i/> LIVE DATASET <span className="season-pill">2026–27</span></div></div>
     </header>
-
-    <section className="board-section vegas-board-section" id="vegas-props">
-      <div className="section-heading">
-        <div><div className="kicker">SPORTSBOOK MARKET</div><h2>Vegas player props</h2><p>Live lines from supported sportsbooks compared with Courtside's saved pregame projections.</p></div>
-        <button type="button" className="refresh-button" disabled={fetchingProps} onClick={async()=>{
-          setFetchingProps(true);setPropsMessage("");
-          try {
-            const response=await fetch("/api/props",{method:"POST"});
-            const result=await response.json();
-            if(!response.ok) throw new Error(result.error || "Vegas props update failed");
-            const board=await fetch("/api/props").then(r=>r.json());
-            setVegasLines(board.lines ?? []);
-            setPropsMessage(result.already_fetched
-              ? `Already collected today · ${board.lines?.length ?? 0} comparisons available`
-              : `Fetched ${result.events_received ?? 0} games · saved ${result.records_written ?? 0} lines · matched ${result.players_matched ?? 0} players${result.unmatched_players ? ` · ${result.unmatched_players} names unmatched` : ""}`);
-          } catch(error) {
-            setPropsMessage(error instanceof Error ? error.message : "Vegas props update failed");
-          } finally { setFetchingProps(false); }
-        }}>{fetchingProps ? "FETCHING…" : "UPDATE VEGAS LINES"}</button>
-      </div>
-      <div className="overview-strip vegas-summary">
-        <div><span>COMPARISONS</span><strong>{vegasLines.length}</strong><small>MAIN MARKET LINES</small></div>
-        <div><span>SPORTSBOOKS</span><strong>{new Set(vegasLines.map(x=>x.sportsbook_name)).size}</strong><small>BOOKS IN THIS SNAPSHOT</small></div>
-        <div><span>MODEL HIGHER</span><strong>{vegasLines.filter(x=>x.injury_status!=="OUT" && Number(x.edge)>0).length}</strong><small>AVAILABLE / NOT OUT</small></div>
-        <div><span>MODEL LOWER</span><strong>{vegasLines.filter(x=>x.injury_status!=="OUT" && Number(x.edge)<0).length}</strong><small>AVAILABLE / NOT OUT</small></div>
-      </div>
-      {propsMessage && <p className="backtest-method" role="status">{propsMessage}</p>}
-      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / MATCHUP</th><th>STATUS</th><th>MARKET</th><th>SPORTSBOOK</th><th>VEGAS LINE</th><th>COURTSIDE</th><th>DIFFERENCE</th></tr></thead><tbody>{vegasLines.slice(0,200).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`} className={line.injury_status==="OUT"?"vegas-player-out":""}><td><strong>{line.full_name}</strong><br/><span>{line.away_team} @ {line.home_team}</span></td><td><span className={`vegas-injury-status vegas-status-${(line.injury_status ?? "UNREPORTED").toLowerCase().replace(/[^a-z]+/g,"-")}`}>{line.injury_status ?? "UNREPORTED"}</span>{line.injury_detail && <><br/><span>{line.injury_detail}</span></>}</td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>Over {line.over_odds ?? "—"} / Under {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No comparable player props are available yet. Update Vegas lines after projections for the slate have been generated.</p>}
-      <p className="backtest-method">Lines are provider snapshots, not guaranteed current betting offers. OUT players remain visible for reference but are excluded from actionable edge counts. Questionable, doubtful and day-to-day players are flagged; UNREPORTED means no current injury status was matched. A positive difference means Courtside's projection is higher than the line; a negative difference means lower.</p>
-    </section>
 
     {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
       <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
@@ -197,6 +185,25 @@ export default function Home() {
           } finally { setRefreshingResults(false); }
         }}>{refreshingResults ? "UPDATING…" : "UPDATE GAME RESULTS"}</button>
         {resultsRefreshMessage && <p role="status">{resultsRefreshMessage}</p>}
+      </div>
+      <div className="manual-injury-refresh">
+        <div><strong>SPORTSBOOK PLAYER LINES</strong><span>Refresh the daily sportsbook snapshot. Lines appear inside each player's card.</span></div>
+        <button type="button" disabled={fetchingProps} onClick={async()=>{
+          setFetchingProps(true);setPropsMessage("");
+          try {
+            const response=await fetch("/api/props",{method:"POST"});
+            const result=await response.json();
+            if(!response.ok) throw new Error(result.error || "Vegas props update failed");
+            const board=await fetch("/api/props").then(r=>r.json());
+            setVegasLines(board.lines ?? []);
+            setPropsMessage(result.already_fetched
+              ? "Already collected today · "+(board.lines?.length ?? 0)+" player comparisons loaded"
+              : "Fetched "+(result.events_received ?? 0)+" games · saved "+(result.records_written ?? 0)+" lines · matched "+(result.players_matched ?? 0)+" players"+(result.unmatched_players ? " · "+result.unmatched_players+" names unmatched" : ""));
+          } catch(error) {
+            setPropsMessage(error instanceof Error ? error.message : "Vegas props update failed");
+          } finally { setFetchingProps(false); }
+        }}>{fetchingProps ? "FETCHING…" : "UPDATE SPORTSBOOK LINES"}</button>
+        {propsMessage && <p role="status">{propsMessage}</p>}
       </div>
       <div className="manual-injury-refresh">
         <div><strong>LIVE PLAYER AVAILABILITY</strong><span>Pull the latest ESPN injury report and depth charts now.</span></div>
@@ -269,7 +276,7 @@ export default function Home() {
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span>{game.players.some(p=>p.injury_designator) && <small className="game-injury-count">{game.players.filter(p=>p.injury_designator).length} INJURY TAGS</small>}</div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
-        {expandedGames[game.gameId] && <div className="player-list">{game.players.some(p=>p.injury_designator) && <div className="game-injury-report"><div className="game-injury-title">INJURY REPORT <span>{game.players.filter(p=>p.injury_designator).length} LISTED</span></div><div className="game-injury-items">{game.players.filter(p=>p.injury_designator).sort((a,b)=>String(a.injury_designator).localeCompare(String(b.injury_designator)) || a.full_name.localeCompare(b.full_name)).map(p=><span key={p.player_id}><b className={`injury-tag injury-${p.injury_designator?.toLowerCase()}`}>{p.injury_designator}</b>{p.full_name} <small>{p.injury_status}</small></span>)}</div></div>} {game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player}/>)}</div>}
+        {expandedGames[game.gameId] && <div className="player-list">{game.players.some(p=>p.injury_designator) && <div className="game-injury-report"><div className="game-injury-title">INJURY REPORT <span>{game.players.filter(p=>p.injury_designator).length} LISTED</span></div><div className="game-injury-items">{game.players.filter(p=>p.injury_designator).sort((a,b)=>String(a.injury_designator).localeCompare(String(b.injury_designator)) || a.full_name.localeCompare(b.full_name)).map(p=><span key={p.player_id}><b className={`injury-tag injury-${p.injury_designator?.toLowerCase()}`}>{p.injury_designator}</b>{p.full_name} <small>{p.injury_status}</small></span>)}</div></div>} {game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player} vegasLines={vegasLines}/>)}</div>}
       </section>)}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
