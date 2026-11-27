@@ -170,7 +170,7 @@ export async function GET() {
         {name:"Opponent defense",status:"active",detail:"Opponent's previous eight games, compared with league averages for each stat."},
         {name:"Game environment",status:"active",detail:"Estimated pace from FGA + 0.44 × FTA + turnovers; home/away history and rest."},
         {name:"Availability and lineup",status:Number(coverage.rows[0].injury_rows)>0 || Number(coverage.rows[0].depth_chart_players)>0?"active":"waiting",detail:"Current ESPN injury statuses and depth-chart roles, plus a conservative redistribution of minutes from unavailable rotation players. Historical injury snapshots are not available yet."},
-        {name:"Backtesting",status:"active",detail:"Walk-forward out-of-sample MAE plus saved forecasts graded against completed ESPN box scores."}
+        {name:"Backtesting",status:"active",detail:"Held-out MAE versus baseline plus saved forecasts graded against completed ESPN box scores. 3-pointers and steals stay at baseline until extra adjustments validate."}
       ]
     },{headers:{"Cache-Control":"s-maxage=900, stale-while-revalidate=3600"}});
   } catch (error) {
