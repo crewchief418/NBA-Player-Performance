@@ -29,7 +29,7 @@ const teamNames: Record<string,string> = {
   POR:"Portland Trail Blazers",SAC:"Sacramento Kings",SAS:"San Antonio Spurs",TOR:"Toronto Raptors",
   UTA:"Utah Jazz",WAS:"Washington Wizards"
 };
-const logoCode: Record<string,string> = {GSW:"gs",NOP:"no",NYK:"ny",PHO:"phx",SAS:"sa",UTA:"utah",WAS:"wsh",BKN:"bkn",CHA:"cha",LAC:"lac"};
+const logoCode: Record<string,string> = {GSW:"gs",NOP:"no",NYK:"ny",PHO:"phx",SAS:"sa",UTA:"utah",WAS:"wsh",BKN:"bkn",BRK:"bkn",CHA:"cha",CHO:"cha",LAC:"lac"};
 
 function safeDate(value: string) {
   if (!value) return null;
