@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 type Status = { connected: boolean; counts?: Record<string, number>; error?: string };
-type ModelDiagnostics = { model?: {version:string}; backtest?: {method:string;metrics:Array<{stat:string;sample_size:number;baseline_mae:string;model_mae:string;model_bias:string;improvement_pct:string}>}; data?: {injury_rows:number;injured_players:number;saved_projection_rows:number;injury_history_available:boolean}; features?: Array<{name:string;status:string;detail:string}>; savedForecasts?: Array<{market_key:string;sample_size:number;mae:string;bias:string}> };
+type ModelDiagnostics = { model?: {version:string}; backtest?: {method:string;metrics:Array<{stat:string;sample_size:number;baseline_mae:string;model_mae:string;model_bias:string;improvement_pct:string}>}; data?: {injury_rows:number;injured_players:number;depth_chart_players:number;saved_projection_rows:number;injury_history_available:boolean}; features?: Array<{name:string;status:string;detail:string}>; savedForecasts?: Array<{market_key:string;sample_size:number;mae:string;bias:string}> };
 type Projection = {
   player_id: number; game_id: number; espn_id?: string | null; full_name: string;
   position: string | null; game_date: string; scheduled_start?: string | null;
