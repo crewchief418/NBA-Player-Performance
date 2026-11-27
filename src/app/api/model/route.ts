@@ -147,17 +147,28 @@ export async function GET() {
         (SELECT count(DISTINCT player_id)::int FROM injury_reports WHERE report_date>=CURRENT_DATE-1) injured_players,
         (SELECT count(*)::int FROM projections p JOIN model_versions m ON m.id=p.model_version_id WHERE m.model_key='courtside_player_performance') saved_projection_rows
     `);
+    const gradedForecasts = await pool.query(`
+      SELECT pm.market_key,count(*)::int sample_size,
+        round(avg(pg.absolute_error)::numeric,2) mae,
+        round(avg(p.projected_mean-pg.actual_value)::numeric,2) bias
+      FROM prediction_grades pg
+      JOIN projections p ON p.id=pg.projection_id
+      JOIN prop_markets pm ON pm.id=p.market_id
+      JOIN model_versions mv ON mv.id=p.model_version_id
+      WHERE mv.model_key='courtside_player_performance' AND pg.prop_line_id IS NULL
+      GROUP BY pm.market_key ORDER BY pm.market_key
+    `);
     return NextResponse.json({
       model:{name:"COURTSIDE performance model",version:"2.0.0"},
       backtest:{method:"Walk-forward: each game is predicted using only the player's previous eight regular-season appearances and the opponent's previous eight team games.",metrics:result.rows},
-      data:{...coverage.rows[0],injury_history_available:false},
+      data:{...coverage.rows[0],injury_history_available:false},\n      savedForecasts:gradedForecasts.rows,
       features:[
         {name:"Recent form",status:"active",detail:"Recency-weighted last-eight per-minute production blended with current-season rates."},
         {name:"Minutes and role",status:"active",detail:"Recent minutes, last-three trend, starter frequency and workload adjustments."},
         {name:"Opponent defense",status:"active",detail:"Opponent's previous eight games, compared with league averages for each stat."},
         {name:"Game environment",status:"active",detail:"Estimated pace from FGA + 0.44 × FTA + turnovers; home/away history and rest."},
         {name:"Availability and lineup",status:Number(coverage.rows[0].injury_rows)>0?"active":"waiting",detail:"Current ESPN injury statuses and depth-chart roles, plus a conservative redistribution of minutes from unavailable rotation players. Historical injury snapshots are not available yet."},
-        {name:"Backtesting",status:"active",detail:"Rolling out-of-sample MAE and bias versus the previous unadjusted last-eight average."}
+        {name:"Backtesting",status:"active",detail:"Walk-forward out-of-sample MAE plus saved forecasts graded against completed ESPN box scores."}
       ]
     });
   } catch (error) {
