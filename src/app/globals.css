@@ -86,3 +86,34 @@
 .manual-injury-refresh button{border:1px solid var(--lime);border-radius:8px;padding:11px 15px;background:var(--lime);color:#101510;font:700 11px 'DM Mono',monospace;letter-spacing:.06em;cursor:pointer}
 .manual-injury-refresh button:disabled{opacity:.55;cursor:wait}
 .manual-injury-refresh p{flex-basis:100%;color:#c6d2c9}
+
+
+/* Sportsbook comparison lives inside each expanded player profile */
+.player-vegas{margin:18px 0 5px;padding:15px;background:linear-gradient(135deg,#111b21,#0c1319);border:1px solid #35443b;border-radius:8px}
+.player-vegas-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.player-vegas-heading h3{font:700 20px 'Barlow Condensed',sans-serif;text-transform:uppercase;letter-spacing:.5px;margin:3px 0 0;color:#eef3ed}
+.player-vegas-heading>span{font:9px 'DM Mono',monospace;color:#a9b5ac;letter-spacing:.8px}
+.player-market-group{border:1px solid #2a3740;border-radius:6px;overflow:hidden;margin-top:10px;background:#0d151b}
+.player-market-title{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:#18232a;border-bottom:1px solid #2b3940}
+.player-market-title>strong{font:600 12px 'DM Mono',monospace;color:#e6ece8}
+.player-market-title>span{font:8px 'DM Mono',monospace;color:#8d9b94;letter-spacing:.7px}
+.player-market-title b{font:700 16px 'Barlow Condensed',sans-serif;color:var(--lime);margin-left:5px}
+.player-book-line{display:grid;grid-template-columns:minmax(110px,1.3fr) minmax(95px,1fr) minmax(90px,.9fr);align-items:center;gap:12px;padding:10px 12px;border-bottom:1px solid #202d35}
+.player-book-line:last-child{border-bottom:0}
+.book-name{font:600 11px 'DM Sans',sans-serif;color:#e0e7e3}
+.book-name small,.book-number small,.book-edge small{display:block;font:8px 'DM Mono',monospace;color:#74838c;margin-top:4px;line-height:1.4}
+.book-number,.book-edge{text-align:right}
+.book-number>span,.book-edge>span{display:block;font:8px 'DM Mono',monospace;color:#788790;letter-spacing:.7px}
+.book-number strong,.book-edge strong{display:block;font:700 18px 'Barlow Condensed',sans-serif;color:#f0f3ef;margin-top:1px}
+.book-edge strong{color:var(--lime)}
+.book-edge.negative-change strong{color:#ff9a7b}
+.book-edge small{color:#98a49d}
+.player-vegas-empty{font-size:10px;line-height:1.6;color:#8b999f;padding:12px;background:#0d151b;border:1px dashed #344149;border-radius:5px}
+.player-vegas-note{font-size:9px;line-height:1.5;color:#71818a;margin:10px 0 0}
+@media(max-width:600px){
+ .player-vegas{padding:10px;margin:14px 0 4px}
+ .player-book-line{grid-template-columns:minmax(85px,1.1fr) minmax(72px,.8fr) minmax(78px,.8fr);gap:7px;padding:9px 8px}
+ .book-name{font-size:10px}.book-name small,.book-number small,.book-edge small{font-size:7px}
+ .book-number strong,.book-edge strong{font-size:17px}
+ .player-market-title{padding:9px}
+}
