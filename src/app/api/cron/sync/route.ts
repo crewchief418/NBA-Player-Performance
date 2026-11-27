@@ -149,7 +149,7 @@ function collectDepthEntries(root: any) {
   return found;
 }
 
-async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:string}>, teamDb: Map<string,number>) {
+async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:string}>, teamDb: Map<string,number>, includeDepth = true) {
   const failures: string[] = [];
   let injuryRows = 0, depthRows = 0;
   try {
@@ -217,34 +217,36 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
     failures.push("Injuries: " + (error instanceof Error ? error.message : String(error)));
   }
 
-  try {
-    const charts = await mapLimit(teamRows,5,async team => ({
-      team,
-      payload: await espn(`/teams/${team.id}/depthcharts`)
-    }));
-    const allEntries = charts.flatMap(({team,payload}) =>
-      collectDepthEntries(payload).map(entry => ({...entry,team}))
-    );
-    if (charts.length !== 30 || allEntries.length < 60) {
-      throw new Error(`Depth chart feed incomplete (${allEntries.length} player-position entries); existing roles preserved`);
-    }
-    // Replace only after all 30 team charts produced a meaningful combined snapshot.
-    await pool.query(
-      `UPDATE players SET metadata=metadata-'depth_chart_rank'-'depth_chart_position'-'depth_chart_updated_at'-'depth_chart_source'
-       WHERE provider='espn'`
-    );
-    for (const entry of allEntries) {
-      const team = entry.team;
-      await pool.query(
-        `UPDATE players SET metadata=metadata || $1::jsonb,updated_at=now()
-         WHERE provider='espn' AND provider_player_id=$2`,
-        [JSON.stringify({depth_chart_rank:String(entry.rank),depth_chart_position:entry.position,
-          depth_chart_updated_at:new Date().toISOString(),depth_chart_source:"espn"}),entry.playerId]
+  if (includeDepth) {
+    try {
+      const charts = await mapLimit(teamRows,5,async team => ({
+        team,
+        payload: await espn(`/teams/${team.id}/depthcharts`)
+      }));
+      const allEntries = charts.flatMap(({team,payload}) =>
+        collectDepthEntries(payload).map(entry => ({...entry,team}))
       );
-      depthRows++;
+      if (charts.length !== 30 || allEntries.length < 60) {
+        throw new Error(`Depth chart feed incomplete (${allEntries.length} player-position entries); existing roles preserved`);
+      }
+      // Replace only after all 30 team charts produced a meaningful combined snapshot.
+      await pool.query(
+        `UPDATE players SET metadata=metadata-'depth_chart_rank'-'depth_chart_position'-'depth_chart_updated_at'-'depth_chart_source'
+         WHERE provider='espn'`
+      );
+      for (const entry of allEntries) {
+        const team = entry.team;
+        await pool.query(
+          `UPDATE players SET metadata=metadata || $1::jsonb,updated_at=now()
+           WHERE provider='espn' AND provider_player_id=$2`,
+          [JSON.stringify({depth_chart_rank:String(entry.rank),depth_chart_position:entry.position,
+            depth_chart_updated_at:new Date().toISOString(),depth_chart_source:"espn"}),entry.playerId]
+        );
+        depthRows++;
+      }
+    } catch (error) {
+      failures.push("Depth charts: " + (error instanceof Error ? error.message : String(error)));
     }
-  } catch (error) {
-    failures.push("Depth charts: " + (error instanceof Error ? error.message : String(error)));
   }
   return {injuryRows,depthRows,failures};
 }
@@ -258,7 +260,7 @@ export async function forceAvailabilityRefresh() {
   const teamRows = teams.map(team => ({...team,canonical:CANON[team.abbreviation]}));
   const teamDbResult = await pool.query("SELECT id,abbreviation FROM teams");
   const teamDb = new Map<string,number>(teamDbResult.rows.map((r:any) => [r.abbreviation, Number(r.id)]));
-  const result = await syncAvailabilityAndDepth(teamRows,teamDb);
+  const result = await syncAvailabilityAndDepth(teamRows,teamDb,false);
   await pool.query(
     `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,records_received,records_written,error_message,metadata)
      VALUES('espn','nba_manual_availability_refresh',now(),now(),$1,30,$2,$3,$4::jsonb)`,
