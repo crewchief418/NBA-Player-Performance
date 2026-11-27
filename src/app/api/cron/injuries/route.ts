@@ -7,6 +7,26 @@ export const maxDuration = 30;
 const ESPN_INJURIES = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries";
 const TEAM_CANON: Record<string,string> = {GS:"GSW",NO:"NOP",NY:"NYK",PHX:"PHO",SA:"SAS",UTAH:"UTA",WSH:"WAS",BRK:"BKN",CHO:"CHA"};
 
+
+function collectDepthPlayers(node: any, inheritedPosition = "", inheritedRank = 0, key = "", output: Array<{id:string;position:string;rank:number}> = []) {
+  if (Array.isArray(node)) {
+    node.forEach((item,index) => collectDepthPlayers(item,inheritedPosition,
+      inheritedRank || (["athletes","players","items","depths","entries"].includes(key.toLowerCase()) ? index+1 : 0),key,output));
+    return output;
+  }
+  if (!node || typeof node !== "object") return output;
+  const position=String(node.position?.abbreviation ?? node.position?.name ?? inheritedPosition ?? "");
+  const rankValue=Number(node.rank ?? node.depth ?? node.order ?? node.sequence ?? inheritedRank);
+  const athlete=node.athlete ?? node.player ?? ((node.id && (node.displayName || node.fullName)) ? node : null);
+  const id=String(athlete?.id ?? athlete?.uid ?? "").replace(/^.*?athlete[:/]/,"");
+  if(id && Number.isFinite(rankValue) && rankValue>0) output.push({id,position,rank:rankValue});
+  for(const [childKey,value] of Object.entries(node)) {
+    if(["athlete","player"].includes(childKey)) continue;
+    collectDepthPlayers(value,position,0,childKey,output);
+  }
+  return output;
+}
+
 function reportDate() {
   return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(new Date());
 }
@@ -39,7 +59,7 @@ export async function GET(request: NextRequest) {
     }
     const teams=await pool.query("SELECT id,abbreviation FROM teams");
     const teamIds=new Map<string,number>(teams.rows.map((t:any)=>[String(t.abbreviation),Number(t.id)]));
-    let saved=0,unmatched=0;
+    let saved=0,unmatched=0,depthPlayers=0,depthTeams=0;
     const date=reportDate();
     for(const teamEntry of teamEntries) {
       const teamAbbr=String(teamEntry.team?.abbreviation ?? teamEntry.abbreviation ?? "");
@@ -68,12 +88,39 @@ export async function GET(request: NextRequest) {
         saved++;
       }
     }
+    // Current depth charts add a lineup-role signal; actual recent starts remain the primary evidence.
+    const teamRecords=await pool.query("SELECT provider_team_id FROM teams WHERE provider='espn'");
+    const teamIdsToCheck=teamRecords.rows.map((row:any)=>String(row.provider_team_id)).filter(Boolean);
+    for(let offset=0;offset<teamIdsToCheck.length;offset+=6) {
+      const batch=teamIdsToCheck.slice(offset,offset+6);
+      const batchResults=await Promise.all(batch.map(async teamEspnId=>{
+        try {
+          const depthResponse=await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamEspnId}/depthcharts`,{
+            headers:{"User-Agent":"CourtsidePlayerModel/1.0"},cache:"no-store",signal:AbortSignal.timeout(10000)
+          });
+          if(!depthResponse.ok) return [];
+          const depthPayload=await depthResponse.json();
+          return collectDepthPlayers(depthPayload);
+        } catch { return []; }
+      }));
+      for(const entries of batchResults) {
+        if(entries.length) depthTeams++;
+        for(const entry of entries) {
+          await pool.query(
+            `UPDATE players SET metadata=metadata || $2::jsonb,updated_at=now()
+             WHERE provider='espn' AND provider_player_id=$1`,
+            [entry.id,JSON.stringify({depth_chart_rank:entry.rank,depth_chart_position:entry.position,depth_chart_updated_at:new Date().toISOString()})]
+          );
+          depthPlayers++;
+        }
+      }
+    }
     await pool.query(
       `INSERT INTO ingestion_runs(provider,dataset,started_at,completed_at,status,records_received,records_written,metadata)
        VALUES('espn','nba_current_injury_reports',$1,now(),'completed',$2,$3,$4::jsonb)`,
-      [startedAt,saved+unmatched,saved,JSON.stringify({report_date:date,unmatched})]
+      [startedAt,saved+unmatched+depthPlayers,saved+depthPlayers,JSON.stringify({report_date:date,unmatched,depth_teams:depthTeams,depth_chart_players:depthPlayers})]
     );
-    return NextResponse.json({success:true,report_date:date,injury_reports:saved,unmatched_players:unmatched});
+    return NextResponse.json({success:true,report_date:date,injury_reports:saved,unmatched_players:unmatched,depth_chart_teams:depthTeams,depth_chart_players:depthPlayers});
   } catch(error) {
     console.error("ESPN injury sync failed",error);
     try {
