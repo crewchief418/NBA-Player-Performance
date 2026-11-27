@@ -362,15 +362,20 @@ export async function GET(request: NextRequest) {
       SET actual_value=EXCLUDED.actual_value,settled_at=now(),source='espn'
     `);
     await pool.query(`
+      WITH latest_projections AS (
+        SELECT DISTINCT ON(p.game_id,p.player_id,p.market_id) p.*
+        FROM projections p
+        JOIN games g ON g.id=p.game_id AND g.status='final'
+        JOIN model_versions mv ON mv.id=p.model_version_id AND mv.model_key='courtside_player_performance'
+        WHERE g.game_date>=CURRENT_DATE-INTERVAL '30 days'
+        ORDER BY p.game_id,p.player_id,p.market_id,p.generated_at DESC
+      )
       INSERT INTO prediction_grades(projection_id,prop_line_id,result,actual_value,absolute_error,squared_error,graded_at)
       SELECT p.id,NULL,'graded',r.actual_value,abs(p.projected_mean-r.actual_value),
         power(p.projected_mean-r.actual_value,2),now()
-      FROM projections p
+      FROM latest_projections p
       JOIN prop_results r ON r.game_id=p.game_id AND r.player_id=p.player_id AND r.market_id=p.market_id
-      JOIN games g ON g.id=p.game_id AND g.status='final'
-      JOIN model_versions mv ON mv.id=p.model_version_id AND mv.model_key='courtside_player_performance'
-      WHERE g.game_date>=CURRENT_DATE-INTERVAL '30 days'
-        AND NOT EXISTS(SELECT 1 FROM prediction_grades pg WHERE pg.projection_id=p.id AND pg.prop_line_id IS NULL)
+      WHERE NOT EXISTS(SELECT 1 FROM prediction_grades pg WHERE pg.projection_id=p.id AND pg.prop_line_id IS NULL)
     `);
 
     const recordsReceived = events.length;
