@@ -159,11 +159,30 @@ export async function GET() {
       WHERE mv.model_key='courtside_player_performance' AND pg.prop_line_id IS NULL
       GROUP BY pm.market_key ORDER BY pm.market_key
     `);
+    const gradedDetails = await pool.query(`
+      SELECT p.id projection_id,g.game_date,pl.full_name,
+        ht.abbreviation home_team,at.abbreviation away_team,
+        pm.market_key,pm.display_name market_name,
+        p.projected_mean,pg.actual_value,pg.absolute_error,
+        round((p.projected_mean-pg.actual_value)::numeric,1) signed_error
+      FROM prediction_grades pg
+      JOIN projections p ON p.id=pg.projection_id
+      JOIN games g ON g.id=p.game_id
+      JOIN players pl ON pl.id=p.player_id
+      JOIN teams ht ON ht.id=g.home_team_id
+      JOIN teams at ON at.id=g.away_team_id
+      JOIN prop_markets pm ON pm.id=p.market_id
+      JOIN model_versions mv ON mv.id=p.model_version_id
+      WHERE mv.model_key='courtside_player_performance' AND pg.prop_line_id IS NULL
+      ORDER BY g.game_date DESC,pl.full_name,pm.market_key
+      LIMIT 100
+    `);
     return NextResponse.json({
       model:{name:"COURTSIDE performance model",version:"2.0.0"},
       backtest:{method:"Held-out walk-forward adjustment check from 2025-26 onward: minutes, venue, pace and opponent-defense adjustments are compared with the last-eight baseline using only pregame history.",metrics:result.rows},
       data:{...coverage.rows[0],injury_history_available:false},
       savedForecasts:gradedForecasts.rows,
+      gradedDetails:gradedDetails.rows,
       features:[
         {name:"Recent form",status:"active",detail:"Recency-weighted last-eight per-minute production blended with current-season rates."},
         {name:"Minutes and role",status:"active",detail:"Recent minutes, last-three trend, starter frequency and workload adjustments."},
