@@ -119,7 +119,7 @@ export async function GET() {
           threes_rate*expected_minutes/36*t_def*t_venue*pace_factor pred_threes,
           steals_rate*expected_minutes/36*s_def*s_venue*pace_factor pred_steals,
           blocks_rate*expected_minutes/36*b_def*b_venue*pace_factor pred_blocks
-        FROM scored
+        FROM scored WHERE season>=2026
       ),
       all_stats AS (
         SELECT 'points' stat,points actual,baseline_points baseline,pred_points prediction FROM predictions
@@ -161,7 +161,7 @@ export async function GET() {
     `);
     return NextResponse.json({
       model:{name:"COURTSIDE performance model",version:"2.0.0"},
-      backtest:{method:"Walk-forward: each game is predicted using only the player's previous eight regular-season appearances and the opponent's previous eight team games.",metrics:result.rows},
+      backtest:{method:"Held-out walk-forward validation from 2025-26 onward: each game is predicted using only prior player appearances and the opponent's prior eight team games.",metrics:result.rows},
       data:{...coverage.rows[0],injury_history_available:false},
       savedForecasts:gradedForecasts.rows,
       features:[
