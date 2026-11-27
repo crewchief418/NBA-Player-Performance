@@ -141,9 +141,39 @@ export default function Home() {
   return <main className="app-shell">
     <header className="top-nav">
       <a className="brand" href="#"><img className="brand-icon-image" src="/icon.svg" alt="" /><span><b>COURTSIDE</b><small>PLAYER PERFORMANCE MODEL</small></span></a>
-      <nav><a className="nav-active" href="#projections">Projections</a><a href="#projections">Player profiles</a><button className={modelMenuOpen ? "menu-trigger menu-trigger-active" : "menu-trigger"} onClick={()=>setModelMenuOpen(v=>!v)} aria-expanded={modelMenuOpen}>MODEL RESULTS <span>{modelMenuOpen ? "−" : "+"}</span></button></nav>
+      <nav><a className="nav-active" href="#projections">Projections</a><a href="#vegas-props">Vegas props</a><button className={modelMenuOpen ? "menu-trigger menu-trigger-active" : "menu-trigger"} onClick={()=>setModelMenuOpen(v=>!v)} aria-expanded={modelMenuOpen}>MODEL RESULTS <span>{modelMenuOpen ? "−" : "+"}</span></button></nav>
       <div className="nav-actions">{installPrompt && <button className="install-button" onClick={async()=>{await installPrompt.prompt();setInstallPrompt(null);}}>INSTALL APP</button>}<div className="nav-status"><i/> LIVE DATASET <span className="season-pill">2026–27</span></div></div>
     </header>
+
+    <section className="board-section vegas-board-section" id="vegas-props">
+      <div className="section-heading">
+        <div><div className="kicker">SPORTSBOOK MARKET</div><h2>Vegas player props</h2><p>Live lines from supported sportsbooks compared with Courtside's saved pregame projections.</p></div>
+        <button type="button" className="refresh-button" disabled={fetchingProps} onClick={async()=>{
+          setFetchingProps(true);setPropsMessage("");
+          try {
+            const response=await fetch("/api/props",{method:"POST"});
+            const result=await response.json();
+            if(!response.ok) throw new Error(result.error || "Vegas props update failed");
+            const board=await fetch("/api/props").then(r=>r.json());
+            setVegasLines(board.lines ?? []);
+            setPropsMessage(result.already_fetched
+              ? `Already collected today · ${board.lines?.length ?? 0} comparisons available`
+              : `Fetched ${result.events_received ?? 0} games · saved ${result.records_written ?? 0} lines · matched ${result.players_matched ?? 0} players${result.unmatched_players ? ` · ${result.unmatched_players} names unmatched` : ""}`);
+          } catch(error) {
+            setPropsMessage(error instanceof Error ? error.message : "Vegas props update failed");
+          } finally { setFetchingProps(false); }
+        }}>{fetchingProps ? "FETCHING…" : "UPDATE VEGAS LINES"}</button>
+      </div>
+      <div className="overview-strip vegas-summary">
+        <div><span>COMPARISONS</span><strong>{vegasLines.length}</strong><small>MAIN MARKET LINES</small></div>
+        <div><span>SPORTSBOOKS</span><strong>{new Set(vegasLines.map(x=>x.sportsbook_name)).size}</strong><small>BOOKS IN THIS SNAPSHOT</small></div>
+        <div><span>MODEL HIGHER</span><strong>{vegasLines.filter(x=>Number(x.edge)>0).length}</strong><small>PROJECTION ABOVE LINE</small></div>
+        <div><span>MODEL LOWER</span><strong>{vegasLines.filter(x=>Number(x.edge)<0).length}</strong><small>PROJECTION BELOW LINE</small></div>
+      </div>
+      {propsMessage && <p className="backtest-method" role="status">{propsMessage}</p>}
+      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / MATCHUP</th><th>MARKET</th><th>SPORTSBOOK</th><th>VEGAS LINE</th><th>COURTSIDE</th><th>DIFFERENCE</th></tr></thead><tbody>{vegasLines.slice(0,200).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`}><td><strong>{line.full_name}</strong><br/><span>{line.away_team} @ {line.home_team}</span></td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>Over {line.over_odds ?? "—"} / Under {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No comparable player props are available yet. Update Vegas lines after projections for the slate have been generated.</p>}
+      <p className="backtest-method">Lines are provider snapshots, not guaranteed current betting offers. A positive difference means Courtside's projection is higher than the line; a negative difference means lower.</p>
+    </section>
 
     {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
       <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
@@ -187,27 +217,7 @@ export default function Home() {
         }}>{refreshingInjuries ? "UPDATING…" : "UPDATE INJURIES"}</button>
         {injuryRefreshMessage && <p role="status">{injuryRefreshMessage}</p>}
       </div>
-      <div className="manual-injury-refresh">
-        <div><strong>VEGAS PLAYER PROPS</strong><span>Compare saved Courtside forecasts with sportsbook player-prop lines. The feed is limited to one successful fetch per UTC day.</span></div>
-        <button type="button" disabled={fetchingProps} onClick={async()=>{
-          setFetchingProps(true);setPropsMessage("");
-          try {
-            const response=await fetch("/api/props",{method:"POST"});
-            const result=await response.json();
-            if(!response.ok) throw new Error(result.error || "Vegas props update failed");
-            const board=await fetch("/api/props").then(r=>r.json());
-            setVegasLines(board.lines ?? []);
-            setPropsMessage(result.already_fetched
-              ? `Already collected today · showing ${board.lines?.length ?? 0} model comparisons`
-              : `Fetched ${result.events_received ?? 0} games · saved ${result.records_written ?? 0} player lines · matched ${result.players_matched ?? 0} players${result.unmatched_players ? ` · ${result.unmatched_players} player names not matched` : ""}`);
-          } catch(error) {
-            setPropsMessage(error instanceof Error ? error.message : "Vegas props update failed");
-          } finally { setFetchingProps(false); }
-        }}>{fetchingProps ? "FETCHING…" : "FETCH VEGAS PROPS"}</button>
-        {propsMessage && <p role="status">{propsMessage}</p>}
-      </div>
-      <div className="backtest-heading saved-grade-heading"><div><h3>Biggest model vs. market differences</h3><p>Positive means Courtside projects higher than the sportsbook line; negative means lower. Differences are not betting recommendations.</p></div></div>
-      {vegasLines.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>PLAYER / GAME</th><th>STAT</th><th>BOOK</th><th>LINE</th><th>MODEL</th><th>MODEL − LINE</th></tr></thead><tbody>{vegasLines.slice(0,100).map((line,index)=><tr key={`${line.full_name}-${line.market_name}-${line.sportsbook_name}-${line.line}-${index}`}><td>{line.full_name}<br/><span>{line.away_team} @ {line.home_team}</span></td><td>{line.market_name}</td><td>{line.sportsbook_name}</td><td>{Number(line.line).toFixed(1)}<br/><span>O {line.over_odds ?? "—"} / U {line.under_odds ?? "—"}</span></td><td>{Number(line.projected_mean).toFixed(1)}</td><td className={Number(line.edge)>0?"positive-change":Number(line.edge)<0?"negative-change":""}>{Number(line.edge)>0?"+":""}{Number(line.edge).toFixed(1)} {Number(line.edge)>0?"MODEL HIGHER":Number(line.edge)<0?"MODEL LOWER":"EVEN"}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">No saved sportsbook lines with matching projections yet. Use Fetch Vegas Props after the slate opens.</p>}
+
       <details className="model-lab" open>
         <summary><span>MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>
         <div className="model-lab-content">
