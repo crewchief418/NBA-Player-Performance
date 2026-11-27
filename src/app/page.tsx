@@ -93,6 +93,13 @@ export default function Home() {
   const [installPrompt,setInstallPrompt] = useState<any>(null);
 
   useEffect(() => {
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    const installHandler = (event: Event) => { event.preventDefault(); setInstallPrompt(event as any); };
+    window.addEventListener("beforeinstallprompt", installHandler);
+    return () => window.removeEventListener("beforeinstallprompt", installHandler);
+  },[]);
+
+  useEffect(() => {
     Promise.all([
       fetch("/api/status").then(r=>r.json()),
       fetch("/api/projections").then(r=>r.json())
@@ -123,10 +130,24 @@ export default function Home() {
       <a className="brand" href="#"><img className="brand-icon-image" src="/icon.svg" alt="" /><span><b>COURTSIDE</b><small>PLAYER PERFORMANCE MODEL</small></span></a>
       <nav><a className="nav-active" href="#projections">Projections</a><a href="#projections">Player profiles</a><button className={modelMenuOpen ? "menu-trigger menu-trigger-active" : "menu-trigger"} onClick={()=>setModelMenuOpen(v=>!v)} aria-expanded={modelMenuOpen}>MODEL RESULTS <span>{modelMenuOpen ? "−" : "+"}</span></button></nav>
       <div className="nav-actions">{installPrompt && <button className="install-button" onClick={async()=>{await installPrompt.prompt();setInstallPrompt(null);}}>INSTALL APP</button>}<div className="nav-status"><i/> LIVE DATASET <span className="season-pill">2026–27</span></div></div>
-      <div className="nav-status"><i/> LIVE DATASET <span className="season-pill">2026–27</span></div>
     </header>
 
-    {modelMenuOpen && <section className="model-menu-panel" id="model-lab">\n      <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>\n      <details className="model-lab" open>\n        <summary><span>MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>\n        <div className="model-lab-content">\n          <div className="feature-grid">{(model?.features ?? []).map(feature=><div className="feature-item" key={feature.name}><div><strong>{feature.name}</strong><span className={feature.status==="active"?"feature-active":"feature-waiting"}>{feature.status==="active"?"ACTIVE":"COLLECTING DATA"}</span></div><p>{feature.detail}</p></div>)}</div>\n          <div className="backtest-heading"><div><h3>Walk-forward backtest</h3><p>Lower MAE is better. Positive improvement means the model beat the old last-eight average.</p></div></div>\n          {model?.backtest?.metrics?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>STAT</th><th>GAMES</th><th>BASELINE MAE</th><th>MODEL MAE</th><th>CHANGE</th></tr></thead><tbody>{model.backtest.metrics.map(metric=><tr key={metric.stat}><td>{metric.stat.toUpperCase()}</td><td>{Number(metric.sample_size).toLocaleString()}</td><td>{metric.baseline_mae}</td><td>{metric.model_mae}</td><td className={Number(metric.improvement_pct)>=0?"positive-change":"negative-change"}>{Number(metric.improvement_pct)>0?"+":""}{metric.improvement_pct}%</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Backtest metrics will appear when the model diagnostics query completes.</p>}\n          <div className="backtest-heading saved-grade-heading"><div><h3>Saved forecast grading</h3><p>Forecasts saved before tipoff are compared with the final ESPN box score after the nightly sync.</p></div></div>\n          {model?.savedForecasts?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>MARKET</th><th>GRADED</th><th>MAE</th><th>BIAS</th></tr></thead><tbody>{model.savedForecasts.map(item=><tr key={item.market_key}><td>{item.market_key.toUpperCase()}</td><td>{Number(item.sample_size).toLocaleString()}</td><td>{item.mae}</td><td>{item.bias}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Saved forecast grades will build as games finish after forecasts have been captured.</p>}\n          <p className="backtest-method">{model?.backtest?.method ?? "Walk-forward validation uses only data from before each game."} Current injury reports: {model?.data?.injured_players ?? 0} players. Historical injury and depth-chart snapshots are not available, so availability and lineup adjustments are excluded from historical backtest scores.</p>\n        </div>\n      </details>\n    </section>}\n\n    <section className="hero">
+    {modelMenuOpen && <section className="model-menu-panel" id="model-lab">
+      <div className="model-lab-heading"><div><div className="kicker">UNDER THE HOOD</div><h2>Model results & diagnostics</h2><p>Accuracy checks, saved forecast grades and modeling inputs.</p></div><span className="model-version">VERSION {model?.model?.version ?? "2.0.0"}</span></div>
+      <details className="model-lab" open>
+        <summary><span>MODEL PERFORMANCE & METHODOLOGY</span><b>{model?.backtest?.metrics?.length ? "BACKTEST READY" : "LOADING DIAGNOSTICS"}</b></summary>
+        <div className="model-lab-content">
+          <div className="feature-grid">{(model?.features ?? []).map(feature=><div className="feature-item" key={feature.name}><div><strong>{feature.name}</strong><span className={feature.status==="active"?"feature-active":"feature-waiting"}>{feature.status==="active"?"ACTIVE":"COLLECTING DATA"}</span></div><p>{feature.detail}</p></div>)}</div>
+          <div className="backtest-heading"><div><h3>Walk-forward backtest</h3><p>Lower MAE is better. Positive improvement means the model beat the old last-eight average.</p></div></div>
+          {model?.backtest?.metrics?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>STAT</th><th>GAMES</th><th>BASELINE MAE</th><th>MODEL MAE</th><th>CHANGE</th></tr></thead><tbody>{model.backtest.metrics.map(metric=><tr key={metric.stat}><td>{metric.stat.toUpperCase()}</td><td>{Number(metric.sample_size).toLocaleString()}</td><td>{metric.baseline_mae}</td><td>{metric.model_mae}</td><td className={Number(metric.improvement_pct)>=0?"positive-change":"negative-change"}>{Number(metric.improvement_pct)>0?"+":""}{metric.improvement_pct}%</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Backtest metrics will appear when the model diagnostics query completes.</p>}
+          <div className="backtest-heading saved-grade-heading"><div><h3>Saved forecast grading</h3><p>Forecasts saved before tipoff are compared with the final ESPN box score after the nightly sync.</p></div></div>
+          {model?.savedForecasts?.length ? <div className="backtest-table-wrap"><table className="backtest-table"><thead><tr><th>MARKET</th><th>GRADED</th><th>MAE</th><th>BIAS</th></tr></thead><tbody>{model.savedForecasts.map(item=><tr key={item.market_key}><td>{item.market_key.toUpperCase()}</td><td>{Number(item.sample_size).toLocaleString()}</td><td>{item.mae}</td><td>{item.bias}</td></tr>)}</tbody></table></div> : <p className="model-lab-empty">Saved forecast grades will build as games finish after forecasts have been captured.</p>}
+          <p className="backtest-method">{model?.backtest?.method ?? "Walk-forward validation uses only data from before each game."} Current injury reports: {model?.data?.injured_players ?? 0} players. Historical injury and depth-chart snapshots are not available, so availability and lineup adjustments are excluded from historical backtest scores.</p>
+        </div>
+      </details>
+    </section>}
+
+    <section className="hero">
       <div className="hero-copy">
         <div className="kicker"><span/> THE DAILY BOARD <span className="kicker-line"/></div>
         <h1>Know the player.<br/><em>Know the performance.</em></h1>
