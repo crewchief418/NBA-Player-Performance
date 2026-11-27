@@ -41,7 +41,7 @@ export async function GET() {
         GROUP BY player_id HAVING count(*) >= 3
       )
       SELECT p.id AS player_id, p.full_name, p.position, p.active,
-        lg.id AS game_id, lg.game_date,
+        lg.id AS game_id, lg.game_date, lg.scheduled_start, p.metadata->>'espn_id' AS espn_id,
         ht.abbreviation AS home_team, at.abbreviation AS away_team,
         a.sample_size, round(a.avg_minutes::numeric,1) AS avg_minutes,
         round(a.points::numeric,1) AS points, round(a.rebounds::numeric,1) AS rebounds,
