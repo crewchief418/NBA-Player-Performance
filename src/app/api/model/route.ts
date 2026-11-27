@@ -13,7 +13,7 @@ export async function GET() {
           g.game_date,g.season,(pgs.team_id=g.home_team_id) is_home,
           g.home_team_id,g.away_team_id
         FROM player_game_stats pgs JOIN games g ON g.id=pgs.game_id
-        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2023 AND pgs.minutes>0
+        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2022 AND pgs.minutes>0
       ),
       player_roll AS (
         SELECT *,
@@ -53,7 +53,7 @@ export async function GET() {
           sum(pgs.assists) assists_allowed,sum(pgs.threes_made) threes_allowed,
           sum(pgs.steals) steals_allowed,sum(pgs.blocks) blocks_allowed
         FROM player_game_stats pgs JOIN games g ON g.id=pgs.game_id
-        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2023
+        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2022
         GROUP BY g.id,g.game_date,pgs.opponent_team_id
       ),
       defense_roll AS (
@@ -71,7 +71,7 @@ export async function GET() {
         SELECT g.id game_id,g.game_date,pgs.team_id,
           sum(coalesce(pgs.field_goals_attempted,0)+0.44*coalesce(pgs.free_throws_attempted,0)+coalesce(pgs.turnovers,0)) possessions
         FROM player_game_stats pgs JOIN games g ON g.id=pgs.game_id
-        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2023
+        WHERE g.status='final' AND g.season_type='regular' AND g.season>=2022
         GROUP BY g.id,g.game_date,pgs.team_id
       ),
       pace_roll AS (
