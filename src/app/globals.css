@@ -73,3 +73,6 @@
 .game-injury-items .injury-tag{margin:0 5px 0 0;min-width:17px;height:17px}
 .game-injury-items small{color:#7f8d97;font-size:8px;margin-left:5px}
 @media(max-width:600px){.game-injury-report{margin:0 7px 8px;padding:9px}.game-injury-items{gap:7px 10px}.game-injury-items>span{font-size:9px}}
+
+
+.game-injury-count{display:block;color:#e5ad62;font:8px 'DM Mono',monospace;letter-spacing:.5px;margin-top:4px}
