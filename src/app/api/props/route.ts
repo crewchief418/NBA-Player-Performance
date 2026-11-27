@@ -176,12 +176,13 @@ export async function POST() {
       const numericId = String(player.provider_player_id ?? "").replace(/^nba:/,"");
       if (numericId) playerMap.set(`id:${numericId}`, Number(player.id));
     }
-    const marketMap = new Map<string, number>(marketResult.rows.map((m:any)=>[m.market_key,Number(m.id)]));
+    const marketMap = new Map<string, number>();
+    for (const market of marketResult.rows) marketMap.set(String(market.market_key), Number(market.id));
     const bookIds = new Map<string, number>();
     const rows: any[] = [];
     let outcomesReceived = 0;
-    let playersMatched = 0;
-    let unmatchedPlayers = 0;
+    const matchedPlayerIds = new Set<number>();
+    const unmatchedPlayerNames = new Set<string>();
     let unmatchedEvents = 0;
     const capturedAt = new Date().toISOString();
 
@@ -217,7 +218,7 @@ export async function POST() {
             const rawName = outcome.description ?? "";
             const playerId = (outcome.player_id ? playerMap.get(`id:${String(outcome.player_id).replace(/^nba:/,"")}`) : undefined)
               ?? playerMap.get(normalized(rawName));
-            if (!playerId) { unmatchedPlayers++; continue; }
+            if (!playerId) { if (rawName) unmatchedPlayerNames.add(normalized(rawName)); continue; }
             const point = Number(outcome.point);
             if (!Number.isFinite(point)) continue;
             const key = `${playerId}|${point}`;
@@ -234,7 +235,7 @@ export async function POST() {
 
           for (const line of grouped.values()) {
             if (line.overOdds === null && line.underOdds === null) continue;
-            playersMatched++;
+            matchedPlayerIds.add(line.playerId);
             rows.push({
               game_id: Number(game.id),
               player_id: line.playerId,
@@ -262,6 +263,9 @@ export async function POST() {
         }
       }
     }
+
+    const playersMatched = matchedPlayerIds.size;
+    const unmatchedPlayers = unmatchedPlayerNames.size;
 
     if (rows.length) {
       await pool.query(`
