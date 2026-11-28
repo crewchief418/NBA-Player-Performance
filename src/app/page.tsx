@@ -13,7 +13,7 @@ type Projection = {
   starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
-type ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number; total?: number | null };
+type ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number; total?: number | null; spread?: number | null };
 type VegasLine = {
   player_id: number; game_id: number; full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
@@ -307,15 +307,15 @@ export default function Home() {
       </div>
       <div className="date-filter"><button className={selectedDate==="all"?"selected":""} onClick={()=>setSelectedDate("all")}>ALL GAMES</button>{dates.map(d=><button key={d.key} className={selectedDate===d.key?"selected":""} onClick={()=>setSelectedDate(d.key)}>{dateLabel(d.value,{weekday:"short",month:"short",day:"numeric"}).toUpperCase()}</button>)}</div>
       {loading ? <div className="loading-state"><div className="loader"/>Building the player board…</div>
-      : games.length ? <div className="game-list">{games.map(game=>{ const liveStatus=scoreboard.find(item=>item.date===game.date.slice(0,10) && item.home===game.home && item.away===game.away); return <section className="game-card" key={game.gameId}>
+      : games.length ? <div className="game-list">{games.map(game=>{ const liveStatus=scoreboard.find(item=>item.date===game.date.slice(0,10) && item.home===game.home && item.away===game.away); const hasVegasProjection=typeof liveStatus?.total==="number" && typeof liveStatus?.spread==="number"; const awayImplied=hasVegasProjection ? (liveStatus.total!+liveStatus.spread!)/2 : null; const homeImplied=hasVegasProjection ? (liveStatus.total!-liveStatus.spread!)/2 : null; const formatVegasScore=(score:number)=>Number.isInteger(score)?String(score):score.toFixed(1); return <section className="game-card" key={game.gameId}>
         <button type="button" className="game-header game-header-toggle" onClick={()=>setExpandedGames(v=>({...v,[game.gameId]:!v[game.gameId]}))} aria-expanded={!!expandedGames[game.gameId]}>
           <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span>{liveStatus?.state==="live" && <span className="game-status-badge game-status-live"><i/>Live</span>}{liveStatus?.state==="final" && <span className="game-status-badge game-status-final">Final</span>}</div>
           <div className="matchup">
-            <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span></div></div>
-            <span className="at-symbol">@</span>
-            <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span></div></div>
+            <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span>{awayImplied !== null && <small className="team-implied-score">{formatVegasScore(awayImplied)}</small>}</div></div>
+            {hasVegasProjection ? <div className="matchup-vegas-total"><span>VEGAS TOTAL</span><strong>{liveStatus!.total!.toFixed(1)}</strong></div> : <span className="at-symbol">@</span>}
+            <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span>{homeImplied !== null && <small className="team-implied-score">{formatVegasScore(homeImplied)}</small>}</div></div>
           </div>
-          {typeof liveStatus?.total === "number" && <div className="game-total"><span>ESPN GAME TOTAL</span><strong>{liveStatus.total}</strong></div>}
+          {typeof liveStatus?.total === "number" && !hasVegasProjection && <div className="game-total"><span>ESPN GAME TOTAL</span><strong>{liveStatus.total}</strong></div>}
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span>{game.players.some(p=>p.injury_designator) && <small className="game-injury-count">{game.players.filter(p=>p.injury_designator).length} INJURY TAGS</small>}</div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
