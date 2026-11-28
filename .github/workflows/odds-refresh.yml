@@ -2,8 +2,8 @@ name: Refresh NBA sportsbook odds
 
 on:
   schedule:
-    # Run the lightweight time check hourly; only call the importer at
-    # 2 AM, 8 AM, noon, and 4 PM America/Denver.
+    # Run the odds importer once overnight at 2 AM America/Denver.
+    # The hourly check keeps the schedule aligned with Mountain daylight time.
     - cron: "0 * * * *"
   workflow_dispatch:
 
@@ -19,17 +19,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check Mountain Time refresh window
+      - name: Check Mountain Time overnight window
         id: window
         shell: bash
         run: |
           hour="$(TZ=America/Denver date +%H)"
-          if [[ "$hour" == "02" || "$hour" == "08" || "$hour" == "12" || "$hour" == "16" ]]; then
+          if [[ "$hour" == "02" ]]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             echo "Refreshing sportsbook odds at $(TZ=America/Denver date '+%Y-%m-%d %H:%M %Z')"
           else
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Outside the scheduled Mountain Time refresh windows."
+            echo "Outside the 2 AM Mountain Time refresh window."
           fi
 
       - name: Refresh sportsbook odds and injuries
