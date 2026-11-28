@@ -125,14 +125,14 @@ export async function GET() {
       LEFT JOIN LATERAL (
         SELECT ir.status,ir.injury
         FROM injury_reports ir
-        WHERE ir.player_id=pl.player_id AND ir.report_date>=CURRENT_DATE-1
+        WHERE ir.player_id=pl.player_id AND ir.report_date>=(now() AT TIME ZONE 'America/New_York')::date-1
         ORDER BY ir.captured_at DESC
         LIMIT 1
       ) injury ON true
       WHERE pl.source='propline'
         AND pl.captured_at>=now()-interval '72 hours'
-        AND g.game_date>=CURRENT_DATE
-        AND g.game_date<=CURRENT_DATE+3
+        AND g.game_date>=(now() AT TIME ZONE 'America/New_York')::date
+        AND g.game_date<=(now() AT TIME ZONE 'America/New_York')::date+3
         AND coalesce(pl.raw_line->>'line_type','main')='main'
         AND forecast.projected_mean>0
       ORDER BY abs(forecast.projected_mean-pl.line) DESC, pl.captured_at DESC
@@ -192,7 +192,7 @@ export async function POST() {
         FROM games g
         JOIN teams ht ON ht.id=g.home_team_id
         JOIN teams at ON at.id=g.away_team_id
-        WHERE g.game_date BETWEEN CURRENT_DATE-1 AND CURRENT_DATE+7
+        WHERE g.game_date BETWEEN (now() AT TIME ZONE 'America/New_York')::date-1 AND (now() AT TIME ZONE 'America/New_York')::date+7
           AND g.status IN ('scheduled','in_progress')
       `),
       pool.query("SELECT id,full_name,provider_player_id FROM players"),
