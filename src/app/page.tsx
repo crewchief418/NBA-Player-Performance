@@ -216,13 +216,16 @@ export default function Home() {
           try {
             const response=await fetch("/api/cron/sync",{method:"POST"});
             const result=await response.json();
-            if(!response.ok) throw new Error(result.error || "Game-results update failed");
+            if(!response.ok && !result.completed_games_checked) throw new Error(result.error || "Game-results update failed");
             const [nextModel,nextStatus]=await Promise.all([
               fetch("/api/model").then(r=>r.json()),
               fetch("/api/status").then(r=>r.json())
             ]);
             setModel(nextModel);setStatus(nextStatus);
-            setResultsRefreshMessage(`Checked ${result.completed_games_checked ?? 0} completed games · imported ${result.boxscores_imported ?? 0} box scores · saved ${result.player_game_rows ?? 0} player stat rows${result.failures?.length ? " · Some games need another try" : ""}`);
+            const failureDetails=Array.isArray(result.failures) && result.failures.length
+              ? " · " + result.failures.slice(0,2).join(" | ")
+              : "";
+            setResultsRefreshMessage(`Checked ${result.completed_games_checked ?? 0} completed games · imported ${result.boxscores_imported ?? 0} box scores · saved ${result.player_game_rows ?? 0} player stat rows${failureDetails}`);
           } catch(error) {
             setResultsRefreshMessage(error instanceof Error ? error.message : "Game-results update failed");
           } finally { setRefreshingResults(false); }
