@@ -12,7 +12,7 @@ type Projection = {
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
   starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
-type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
+type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };\ntype ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number };
 type VegasLine = {
   player_id: number; game_id: number; full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
@@ -146,7 +146,7 @@ export default function Home() {
   const [resultsRefreshMessage,setResultsRefreshMessage] = useState("");
   const [fetchingProps,setFetchingProps] = useState(false);
   const [propsMessage,setPropsMessage] = useState("");
-  const [vegasLines,setVegasLines] = useState<VegasLine[]>([]);
+  const [vegasLines,setVegasLines] = useState<VegasLine[]>([]);\n  const [scoreboard,setScoreboard] = useState<ScoreboardGame[]>([]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
@@ -166,6 +166,23 @@ export default function Home() {
     }).catch(()=>setStatus({connected:false})).finally(()=>setLoading(false));
     fetch("/api/props").then(r=>r.json()).then(data=>setVegasLines(data.lines ?? [])).catch(()=>setVegasLines([]));
   },[]);
+
+  useEffect(() => {
+    let active = true;
+    const refreshScoreboard = async () => {
+      const dateKeys = [...new Set(rows.map(row => row.game_date.slice(0,10)))];
+      if (!dateKeys.length) return;
+      try {
+        const response = await fetch("/api/scoreboard?dates=" + dateKeys.map(date => date.replace(/-/g,"")).join(","));
+        if (!response.ok) return;
+        const data = await response.json();
+        if (active) setScoreboard(data.games ?? []);
+      } catch { /* Keep the last known game status if the scoreboard is temporarily unavailable. */ }
+    };
+    refreshScoreboard();
+    const timer = window.setInterval(refreshScoreboard, 30000);
+    return () => { active = false; window.clearInterval(timer); };
+  },[rows]);
 
   const filtered = useMemo(()=>rows.filter(r=>r.full_name.toLowerCase().includes(search.toLowerCase())),[rows,search]);
   const games = useMemo(()=>{
@@ -289,9 +306,9 @@ export default function Home() {
       </div>
       <div className="date-filter"><button className={selectedDate==="all"?"selected":""} onClick={()=>setSelectedDate("all")}>ALL GAMES</button>{dates.map(d=><button key={d.key} className={selectedDate===d.key?"selected":""} onClick={()=>setSelectedDate(d.key)}>{dateLabel(d.value,{weekday:"short",month:"short",day:"numeric"}).toUpperCase()}</button>)}</div>
       {loading ? <div className="loading-state"><div className="loader"/>Building the player board…</div>
-      : games.length ? <div className="game-list">{games.map(game=><section className="game-card" key={game.gameId}>
+      : games.length ? <div className="game-list">{games.map(game=>{ const liveStatus=scoreboard.find(item=>item.date===game.date.slice(0,10) && item.home===game.home && item.away===game.away); return <section className="game-card" key={game.gameId}>
         <button type="button" className="game-header game-header-toggle" onClick={()=>setExpandedGames(v=>({...v,[game.gameId]:!v[game.gameId]}))} aria-expanded={!!expandedGames[game.gameId]}>
-          <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span></div>
+          <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span>{liveStatus?.state==="live" && <span className="game-status-badge game-status-live"><i/>Live</span>}{liveStatus?.state==="final" && <span className="game-status-badge game-status-final">Final</span>}</div>
           <div className="matchup">
             <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span></div></div>
             <span className="at-symbol">@</span>
