@@ -138,3 +138,11 @@
 .game-total{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 11px;border:1px solid var(--border,rgba(148,163,184,.2));border-radius:9px;background:rgba(148,163,184,.06);min-width:76px}
 .game-total span{font-size:8px;font-weight:800;letter-spacing:.09em;color:var(--muted,#94a3b8);white-space:nowrap}
 .game-total strong{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums;color:var(--foreground,#f8fafc)}
+
+
+/* Vegas-implied team scores derived from the game total and home-perspective spread */
+.team-implied-score{display:block!important;margin-top:4px;color:var(--lime)!important;font:700 15px 'Barlow Condensed',sans-serif!important;letter-spacing:.2px;font-variant-numeric:tabular-nums}
+.matchup-vegas-total{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-width:66px;padding:5px 8px;border:1px solid #39483a;border-radius:6px;background:#a4d65b0d}
+.matchup-vegas-total span{font:8px 'DM Mono',monospace;letter-spacing:.7px;color:#8f9d91;white-space:nowrap}
+.matchup-vegas-total strong{font:700 18px 'Barlow Condensed',sans-serif;color:#eef4eb;font-variant-numeric:tabular-nums}
+@media(max-width:600px){.matchup-vegas-total{min-width:54px;padding:4px 5px}.matchup-vegas-total span{font-size:7px}.matchup-vegas-total strong{font-size:16px}.team-implied-score{font-size:14px!important}}
