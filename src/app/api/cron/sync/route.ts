@@ -48,7 +48,7 @@ async function espn(path: string, params?: Record<string, string>) {
 }
 
 function gameDate(date: string) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(new Date(date));
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Denver" }).format(new Date(date));
 }
 function numeric(value: unknown): number | null {
   if (value === null || value === undefined || value === "" || value === "--") return null;
