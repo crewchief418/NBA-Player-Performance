@@ -13,7 +13,7 @@ type Projection = {
   starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
 type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
-type ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number };
+type ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number; total?: number | null };
 type VegasLine = {
   player_id: number; game_id: number; full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
@@ -315,6 +315,7 @@ export default function Home() {
             <span className="at-symbol">@</span>
             <div className="team-side home-side"><TeamMark abbr={game.home} large/><div><strong>{game.home}</strong><span>{teamNames[game.home] ?? game.home}</span></div></div>
           </div>
+          {typeof liveStatus?.total === "number" && <div className="game-total"><span>ESPN GAME TOTAL</span><strong>{liveStatus.total}</strong></div>}
           <div className="game-count">{game.players.length}<span>PLAYER<br/>FORECASTS</span>{game.players.some(p=>p.injury_designator) && <small className="game-injury-count">{game.players.filter(p=>p.injury_designator).length} INJURY TAGS</small>}</div>
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
