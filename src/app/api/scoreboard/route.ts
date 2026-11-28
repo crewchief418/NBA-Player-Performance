@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 type Event = {
+  id?: string;
   date?: string;
   status?: { type?: { state?: string; completed?: boolean; shortDetail?: string }; period?: number; displayClock?: string };
   competitions?: Array<{ competitors?: Array<{ homeAway?: string; team?: { abbreviation?: string } }> }>;
@@ -14,16 +15,27 @@ export async function GET(request: NextRequest) {
       const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=${date}`, { next: { revalidate: 15 } });
       if (!response.ok) return [];
       const data = await response.json() as { events?: Event[] };
-      return (data.events ?? []).flatMap(event => {
+      const games = await Promise.all((data.events ?? []).map(async event => {
         const competitors = event.competitions?.[0]?.competitors ?? [];
         const home = competitors.find(team => team.homeAway === "home")?.team?.abbreviation;
         const away = competitors.find(team => team.homeAway === "away")?.team?.abbreviation;
-        if (!home || !away) return [];
+        if (!home || !away || !event.id) return null;
         const normalize = (team: string) => ({ PHX: "PHO", GS: "GSW", NO: "NOP", SA: "SAS", NY: "NYK" } as Record<string,string>)[team] ?? team;
         const status = event.status;
         const state = status?.type?.completed || status?.type?.state === "post" ? "final" : status?.type?.state === "in" ? "live" : "scheduled";
-        return [{ date: (event.date ?? "").slice(0,10), home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period }];
-      });
+        let total: number | null = null;
+        try {
+          const oddsResponse = await fetch(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/${event.id}/competitions/${event.id}/odds`, { next: { revalidate: 300 } });
+          if (oddsResponse.ok) {
+            const odds = await oddsResponse.json() as { items?: Array<{ overUnder?: number; provider?: { priority?: number } }> };
+            const available = (odds.items ?? []).filter(item => typeof item.overUnder === "number");
+            available.sort((a,b) => (a.provider?.priority ?? 999) - (b.provider?.priority ?? 999));
+            total = available[0]?.overUnder ?? null;
+          }
+        } catch { /* Odds may not be posted for every game. */ }
+        return { date: (event.date ?? "").slice(0,10), home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period, total };
+      }));
+      return games.filter((game): game is NonNullable<typeof game> => game !== null);
     } catch { return []; }
   }));
   return NextResponse.json({ games: results.flat() }, { headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" } });
