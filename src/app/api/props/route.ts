@@ -22,9 +22,9 @@ function normalized(value: string) {
   return value.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/\([^)]*\)/g, " ").replace(/[^a-z0-9]+/g, " ").trim();
 }
-function easternDate(value: string) {
+function mountainDate(value: string) {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit"
+    timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit"
   }).format(new Date(value));
 }
 const TEAM_ABBREVIATIONS: Record<string,string> = {
@@ -125,14 +125,14 @@ export async function GET() {
       LEFT JOIN LATERAL (
         SELECT ir.status,ir.injury
         FROM injury_reports ir
-        WHERE ir.player_id=pl.player_id AND ir.report_date>=(now() AT TIME ZONE 'America/New_York')::date-1
+        WHERE ir.player_id=pl.player_id AND ir.report_date>=(now() AT TIME ZONE 'America/Denver')::date-1
         ORDER BY ir.captured_at DESC
         LIMIT 1
       ) injury ON true
       WHERE pl.source='propline'
         AND pl.captured_at>=now()-interval '72 hours'
-        AND g.game_date>=(now() AT TIME ZONE 'America/New_York')::date
-        AND g.game_date<=(now() AT TIME ZONE 'America/New_York')::date+3
+        AND g.game_date>=(now() AT TIME ZONE 'America/Denver')::date
+        AND g.game_date<=(now() AT TIME ZONE 'America/Denver')::date+3
         AND coalesce(pl.raw_line->>'line_type','main')='main'
         AND forecast.projected_mean>0
       ORDER BY abs(forecast.projected_mean-pl.line) DESC, pl.captured_at DESC
@@ -162,19 +162,20 @@ export async function POST() {
       SELECT id,started_at,status,completed_at,records_written
       FROM ingestion_runs
       WHERE provider='propline' AND dataset='nba_player_props'
-        AND started_at >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+        AND started_at >= now() - interval '3 hours'
       ORDER BY started_at DESC LIMIT 1
     `);
     const previous = recent.rows[0];
+    if (previous?.status === "running") {
+      return NextResponse.json({ error: "A Vegas props update is already running." }, { status: 409 });
+    }
     if (previous?.status === "completed") {
       return NextResponse.json({
         already_fetched: true,
         completed_at: previous.completed_at,
-        records_written: previous.records_written
+        records_written: previous.records_written,
+        next_update_allowed_at: new Date(new Date(previous.completed_at).getTime() + 3 * 60 * 60 * 1000).toISOString()
       });
-    }
-    if (previous?.status === "running") {
-      return NextResponse.json({ error: "A Vegas props update is already running." }, { status: 409 });
     }
 
     const run = await pool.query(`
@@ -192,7 +193,7 @@ export async function POST() {
         FROM games g
         JOIN teams ht ON ht.id=g.home_team_id
         JOIN teams at ON at.id=g.away_team_id
-        WHERE g.game_date BETWEEN (now() AT TIME ZONE 'America/New_York')::date-1 AND (now() AT TIME ZONE 'America/New_York')::date+7
+        WHERE g.game_date BETWEEN (now() AT TIME ZONE 'America/Denver')::date-1 AND (now() AT TIME ZONE 'America/Denver')::date+7
           AND g.status IN ('scheduled','in_progress')
       `),
       pool.query("SELECT id,full_name,provider_player_id FROM players"),
@@ -207,7 +208,7 @@ export async function POST() {
       const numericId = String(player.provider_player_id ?? "").replace(/^nba:/,"");
       if (numericId) playerMap.set(`id:${numericId}`, Number(player.id));
     }
-    const reportDate = easternDate(new Date().toISOString());
+    const reportDate = mountainDate(new Date().toISOString());
     let injuryReportsSaved=0,injuryPlayersUnmatched=0;
     for(const item of injuryPlayers) {
       const espnId=String(item.espn_athlete_id ?? item.player_id ?? "").replace(/^espn:/,"");
@@ -239,7 +240,7 @@ export async function POST() {
 
     for (const event of events) {
       if (!event.commence_time || !event.home_team || !event.away_team) continue;
-      const date = easternDate(event.commence_time);
+      const date = mountainDate(event.commence_time);
       const home = TEAM_ABBREVIATIONS[normalized(event.home_team)] ?? "";
       const away = TEAM_ABBREVIATIONS[normalized(event.away_team)] ?? "";
       const gameKey = `${date}|${home}|${away}`;
