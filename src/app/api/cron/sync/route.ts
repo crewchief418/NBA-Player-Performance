@@ -60,14 +60,20 @@ function made(value: unknown): number | null {
   const n = Number(String(value).split("-")[0]);
   return Number.isFinite(n) ? n : null;
 }
+function displayValue(value: any): unknown {
+  if (value && typeof value === "object") return value.displayValue ?? value.value ?? value.text ?? null;
+  return value;
+}
 function minutes(value: unknown): number | null {
-  if (value === null || value === undefined || value === "" || value === "--") return null;
-  const s = String(value);
+  const raw = displayValue(value);
+  if (raw === null || raw === undefined || raw === "" || raw === "--" || raw === "DNP") return null;
+  const s = String(raw).trim();
   if (s.includes(":")) {
     const [m, sec] = s.split(":").map(Number);
     return Number.isFinite(m) && Number.isFinite(sec) ? m + sec/60 : null;
   }
-  return numeric(s);
+  const n = numeric(s);
+  return n !== null && n >= 0 && n <= 70 ? n : null;
 }
 
 function asTeam(item: any): EspnTeam {
@@ -351,31 +357,46 @@ async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gam
   try {
     await client.query("BEGIN");
     for (const side of boxTeams) {
-      const sideAbbr = CANON[String(side.team?.abbreviation ?? "")] ?? String(side.team?.abbreviation ?? "");
-      const providerTeamId = String(side.team?.id ?? side.id ?? "");
-      const teamId = teamDb.get(sideAbbr) ?? providerTeamIdToDb.get(providerTeamId);
+      const rawAbbr = String(side.team?.abbreviation ?? side.abbreviation ?? side.teamAbbreviation ?? "");
+      const sideAbbr = CANON[rawAbbr] ?? rawAbbr;
+      const providerTeamId = String(side.team?.id ?? side.teamId ?? side.id ?? "");
+      const teamName = String(side.team?.displayName ?? side.team?.name ?? side.displayName ?? "");
+      const nameMatch = [home, away].find(x => {
+        const abbr = CANON[x.abbr] ?? x.abbr;
+        return abbr === sideAbbr || String(x.team_id) === providerTeamId ||
+          teamName.toLowerCase().includes(abbr.toLowerCase());
+      });
+      const teamId = teamDb.get(sideAbbr) ?? providerTeamIdToDb.get(providerTeamId) ??
+        (nameMatch ? teamDb.get(CANON[nameMatch.abbr] ?? nameMatch.abbr) : undefined);
       const opponentId = teamId === homeDb ? awayDb : homeDb;
       if (!teamId) continue;
       const categories = Array.isArray(side.statistics) ? side.statistics
-        : Array.isArray(side.statistics?.categories) ? side.statistics.categories : [];
+        : Array.isArray(side.statistics?.categories) ? side.statistics.categories
+        : Array.isArray(side.stats) ? side.stats : [];
       for (const category of categories) {
-        const labels: string[] = category.labels ?? category.keys ?? category.names ?? [];
-        const athleteRows = category.athletes ?? category.players ?? [];
+        const rawLabels = category.labels ?? category.keys ?? category.names ?? category.displayNames ?? [];
+        const labels: string[] = Array.isArray(rawLabels)
+          ? rawLabels.map((x: any) => String(displayValue(x) ?? x))
+          : Object.keys(rawLabels ?? {});
+        const athleteRows = category.athletes ?? category.players ?? category.entries ?? [];
         for (const athleteRow of athleteRows) {
-          const athlete = athleteRow.athlete ?? athleteRow.player ?? {};
-          const playerProviderId = String(athlete.id ?? athleteRow.athleteId ?? "");
+          const athlete = athleteRow.athlete ?? athleteRow.player ?? athleteRow;
+          const playerProviderId = String(athlete.id ?? athleteRow.athleteId ?? athleteRow.playerId ?? "");
           if (!playerProviderId || athleteRow.didNotPlay || athleteRow.reason || athleteRow.didNotPlayReason) continue;
           const stats: Record<string,string> = {};
-          if (Array.isArray(athleteRow.stats)) {
-            athleteRow.stats.forEach((value: unknown, i: number) => {
-              if (labels[i]) stats[String(labels[i]).toUpperCase()] = String(value);
+          const rawStats = athleteRow.stats ?? athleteRow.statistics ?? athleteRow.values ?? {};
+          if (Array.isArray(rawStats)) {
+            rawStats.forEach((value: unknown, i: number) => {
+              const key = labels[i] ?? (i === 0 ? "MIN" : "");
+              if (key) stats[String(key).toUpperCase()] = String(displayValue(value) ?? "");
             });
-          } else if (athleteRow.stats && typeof athleteRow.stats === "object") {
-            for (const [key, value] of Object.entries(athleteRow.stats)) {
-              stats[String(key).toUpperCase()] = String(value);
+          } else if (rawStats && typeof rawStats === "object") {
+            for (const [key, value] of Object.entries(rawStats)) {
+              stats[String(key).toUpperCase()] = String(displayValue(value) ?? "");
             }
           }
-          const min = minutes(stats.MIN ?? stats.MINS ?? stats.MINUTES ?? athleteRow.minutes);
+          const min = minutes(stats.MIN ?? stats.MINS ?? stats.MINUTES ??
+            athleteRow.minutes ?? athleteRow.min ?? athlete.minutes);
           if (min === null) continue;
           const playerName = athlete.fullName ?? athlete.displayName ?? "Unknown";
           const parts = String(playerName).trim().split(/\s+/);
