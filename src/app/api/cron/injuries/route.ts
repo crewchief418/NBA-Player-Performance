@@ -28,7 +28,7 @@ function collectDepthPlayers(node: any, inheritedPosition = "", inheritedRank = 
 }
 
 function reportDate() {
-  return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(new Date());
+  return new Intl.DateTimeFormat("en-CA",{timeZone:"America/Denver"}).format(new Date());
 }
 function normalizeStatus(value: unknown) {
   const status=String(value ?? "QUESTIONABLE").toLowerCase();
