@@ -271,8 +271,62 @@ export async function forceAvailabilityRefresh() {
   return result;
 }
 
+
+async function espnCdnBoxscore(eventId: string) {
+  const url = new URL("https://cdn.espn.com/core/nba/boxscore");
+  url.searchParams.set("xhr", "1");
+  url.searchParams.set("gameId", eventId);
+  const response = await fetch(url, {
+    headers: { "User-Agent": "CourtsidePlayerModel/1.0", "Accept": "application/json" },
+    cache: "no-store",
+    signal: AbortSignal.timeout(25000)
+  });
+  if (!response.ok) throw new Error(`ESPN CDN boxscore ${response.status} for game ${eventId}`);
+  return response.json();
+}
+
+function findBoxscorePlayers(payload: any): any[] {
+  const seen = new Set<any>();
+  const walk = (node: any, depth = 0): any[] | null => {
+    if (!node || typeof node !== "object" || depth > 6 || seen.has(node)) return null;
+    seen.add(node);
+    if (!Array.isArray(node)) {
+      const players = node.boxscore?.players;
+      if (Array.isArray(players) && players.length) return players;
+      for (const value of Object.values(node)) {
+        const result = walk(value, depth + 1);
+        if (result?.length) return result;
+      }
+    } else {
+      for (const value of node) {
+        const result = walk(value, depth + 1);
+        if (result?.length) return result;
+      }
+    }
+    return null;
+  };
+  return walk(payload) ?? [];
+}
+
 async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gameDb: Map<string, number>) {
-  const summary = await espn("/summary", { event: event.id });
+  let summary: any = await espn("/summary", { event: event.id });
+  let boxTeams = findBoxscorePlayers(summary);
+  let boxscoreSource = "site-summary";
+  if (boxTeams.length === 0) {
+    // ESPN's Site v2 summary occasionally omits the player boxscore even when
+    // the game is final. Retry through ESPN's CDN boxscore package before
+    // treating the game as unavailable.
+    const cdnPayload = await espnCdnBoxscore(event.id);
+    boxTeams = findBoxscorePlayers(cdnPayload);
+    if (boxTeams.length > 0) {
+      summary = cdnPayload.gamepackageJSON ?? cdnPayload.content?.gamepackageJSON ?? cdnPayload;
+      boxscoreSource = "cdn-boxscore";
+    }
+  }
+  if (boxTeams.length === 0) {
+    const responseKeys = Object.keys(summary ?? {}).slice(0, 20).join(", ") || "none";
+    throw new Error(`ESPN summary and CDN boxscore both returned no player rows (summary keys: ${responseKeys})`);
+  }
   const gameId = gameDb.get(event.id);
   if (!gameId) throw new Error(`Missing database game ${event.id}`);
   const sides = event.competitors;
