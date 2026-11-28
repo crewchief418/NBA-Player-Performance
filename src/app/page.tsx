@@ -147,7 +147,8 @@ export default function Home() {
   const [resultsRefreshMessage,setResultsRefreshMessage] = useState("");
   const [fetchingProps,setFetchingProps] = useState(false);
   const [propsMessage,setPropsMessage] = useState("");
-  const [vegasLines,setVegasLines] = useState<VegasLine[]>([]);\n  const [scoreboard,setScoreboard] = useState<ScoreboardGame[]>([]);
+  const [vegasLines,setVegasLines] = useState<VegasLine[]>([]);
+  const [scoreboard,setScoreboard] = useState<ScoreboardGame[]>([]);
 
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
