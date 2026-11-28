@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         } catch { /* Odds may not be posted for every game. */ }
         const eventDate = event.date ? new Date(event.date) : null;
         const dateParts = eventDate && !Number.isNaN(eventDate.getTime())
-          ? new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(eventDate)
+          ? new Intl.DateTimeFormat("en-US", { timeZone: "America/Denver", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(eventDate)
           : [];
         const localDate = dateParts.length
           ? `${dateParts.find(part => part.type === "year")?.value}-${dateParts.find(part => part.type === "month")?.value}-${dateParts.find(part => part.type === "day")?.value}`
