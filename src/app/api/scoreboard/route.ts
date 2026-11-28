@@ -7,7 +7,7 @@ type Event = {
 };
 
 export async function GET(request: NextRequest) {
-  const dates = (request.nextUrl.searchParams.get("dates") ?? "").split(",").filter(value => /^\\d{8}$/.test(value)).slice(0,14);
+  const dates = (request.nextUrl.searchParams.get("dates") ?? "").split(",").filter(value => /^\d{8}$/.test(value)).slice(0,14);
   if (!dates.length) return NextResponse.json({ games: [] });
   const results = await Promise.all(dates.map(async date => {
     try {
