@@ -157,7 +157,7 @@ async function syncAvailabilityAndDepth(teamRows: Array<EspnTeam & {canonical:st
     const groups = Array.isArray(payload?.injuries) ? payload.injuries : null;
     if (!groups || payload?.status === "error") throw new Error("ESPN injury feed did not return a valid injuries array");
     const current = new Date();
-    const reportDate = new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York"}).format(current);
+    const reportDate = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Denver"}).format(current);
     const entries: any[] = [];
     let skippedMissingPlayerId = 0;
     const providerTeamIds = new Map(teamRows.map(team => [String(team.id), team.canonical]));
