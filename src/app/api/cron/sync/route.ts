@@ -304,7 +304,7 @@ function findNbaGame(event:EspnEvent,schedule:NbaScheduleGame[]) {
 function nbaMinutes(value:unknown):number|null {
   if(value===null||value===undefined||value==="") return null;
   const s=String(displayValue(value)??value).trim();
-  const m=s.match(/^PT(?:(\d+)M)?(?:(\d+(?:\\.\d+)?)S)?$/i);
+  const m=s.match(/^PT(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i);
   if(m){const n=Number(m[1]??0)+Number(m[2]??0)/60;return n>0&&Number.isFinite(n)?n:null;}
   return minutes(s);
 }
