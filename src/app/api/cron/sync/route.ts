@@ -278,6 +278,92 @@ export async function forceAvailabilityRefresh() {
 }
 
 
+async function nbaJson(url: string) {
+  const response = await fetch(url, {headers:{"User-Agent":"CourtsidePlayerModel/1.0","Accept":"application/json"},cache:"no-store",signal:AbortSignal.timeout(25000)});
+  if (!response.ok) throw new Error(`NBA feed ${response.status} at ${url}`);
+  return response.json();
+}
+type NbaScheduleGame = {gameId:string;gameDateUTC?:string;gameDate?:string;homeTeam?:{teamTricode?:string};awayTeam?:{teamTricode?:string}};
+async function loadNbaSchedule(): Promise<NbaScheduleGame[]> {
+  const payload = await nbaJson("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json");
+  const games = (payload?.leagueSchedule?.gameDates ?? []).flatMap((d:any)=>Array.isArray(d.games)?d.games:[]);
+  const valid = games.filter((g:any)=>/^\\d{10}$/.test(String(g.gameId??"")));
+  if (!valid.length) throw new Error("NBA official schedule returned no games");
+  return valid;
+}
+function findNbaGame(event:EspnEvent,schedule:NbaScheduleGame[]) {
+  const home=event.competitors.find(x=>x.homeAway==="home"), away=event.competitors.find(x=>x.homeAway==="away");
+  if(!home||!away) return undefined;
+  const h=CANON[home.abbr]??home.abbr, a=CANON[away.abbr]??away.abbr;
+  return schedule.find(g=>{
+    const gh=String(g.homeTeam?.teamTricode??""), ga=String(g.awayTeam?.teamTricode??"");
+    const gd=g.gameDateUTC??g.gameDate??"";
+    return (CANON[gh]??gh)===h && (CANON[ga]??ga)===a && gd && gameDate(gd)===gameDate(event.date);
+  });
+}
+function nbaMinutes(value:unknown):number|null {
+  if(value===null||value===undefined||value==="") return null;
+  const s=String(displayValue(value)??value).trim();
+  const m=s.match(/^PT(?:(\\d+)M)?(?:(\\d+(?:\\.\\d+)?)S)?$/i);
+  if(m){const n=Number(m[1]??0)+Number(m[2]??0)/60;return n>0&&Number.isFinite(n)?n:null;}
+  return minutes(s);
+}
+async function importNbaBoxscore(event:EspnEvent,nbaGame:NbaScheduleGame,teamDb:Map<string,number>,gameDb:Map<string,number>){
+  const payload=await nbaJson(`https://cdn.nba.com/static/json/liveData/boxscore/boxscore_${nbaGame.gameId}.json`);
+  const game=payload?.game??payload?.boxscore??payload, gameId=gameDb.get(event.id);
+  if(!gameId) throw new Error(`Missing database game ${event.id}`);
+  const sides=[{side:game.awayTeam,opponent:game.homeTeam},{side:game.homeTeam,opponent:game.awayTeam}];
+  let written=0; const client=await pool.connect();
+  try{
+    await client.query("BEGIN");
+    for(const {side,opponent} of sides){
+      const raw=String(side?.teamTricode??side?.teamAbbreviation??"");
+      const oppRaw=String(opponent?.teamTricode??opponent?.teamAbbreviation??"");
+      const teamId=teamDb.get(CANON[raw]??raw), opponentId=teamDb.get(CANON[oppRaw]??oppRaw);
+      if(!teamId||!opponentId) throw new Error(`NBA team mapping failed for ${raw}/${oppRaw}`);
+      const players=Array.isArray(side.players)?side.players:[];
+      if(!players.length) throw new Error(`NBA boxscore has no players for ${raw}`);
+      for(const player of players){
+        if(player.played===false||player.status==="INACTIVE") continue;
+        const st=player.statistics??{}, min=nbaMinutes(st.minutes??st.minutesCalculated??player.minutes);
+        const nbaId=String(player.personId??player.playerId??"");
+        if(min===null||!nbaId) continue;
+        const name=String(player.name??[player.firstName,player.familyName].filter(Boolean).join(" ")??"Unknown").trim();
+        const first=player.firstName??name.split(/\\s+/)[0]??null, last=player.familyName??name.split(/\\s+/).slice(1).join(" ")??null;
+        const found=await client.query(`SELECT id FROM players WHERE metadata->>'nba_player_id'=$1 OR (provider='espn' AND lower(full_name)=lower($2)) ORDER BY CASE WHEN metadata->>'nba_player_id'=$1 THEN 0 ELSE 1 END LIMIT 1`,[nbaId,name]);
+        let playerId:number;
+        if(found.rowCount){
+          playerId=Number(found.rows[0].id);
+          await client.query("UPDATE players SET metadata=metadata || $1::jsonb,updated_at=now() WHERE id=$2",[JSON.stringify({nba_player_id:nbaId,nba_player_name:name}),playerId]);
+        }else{
+          const ins=await client.query(`INSERT INTO players(provider,provider_player_id,full_name,first_name,last_name,position,active,metadata)
+            VALUES('nba',$1,$2,$3,$4,$5,true,$6::jsonb)
+            ON CONFLICT(provider,provider_player_id) DO UPDATE SET full_name=EXCLUDED.full_name,updated_at=now() RETURNING id`,
+            [nbaId,name,first,last,player.position??null,JSON.stringify({nba_player_id:nbaId})]);
+          playerId=Number(ins.rows[0].id);
+        }
+        await client.query(`INSERT INTO player_game_stats
+          (game_id,player_id,team_id,opponent_team_id,started,minutes,points,rebounds,assists,threes_made,steals,blocks,turnovers,
+           field_goals_made,field_goals_attempted,free_throws_made,free_throws_attempted,source,raw_stats)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'nba',$18::jsonb)
+          ON CONFLICT(game_id,player_id) DO UPDATE SET team_id=EXCLUDED.team_id,opponent_team_id=EXCLUDED.opponent_team_id,
+          started=EXCLUDED.started,minutes=EXCLUDED.minutes,points=EXCLUDED.points,rebounds=EXCLUDED.rebounds,assists=EXCLUDED.assists,
+          threes_made=EXCLUDED.threes_made,steals=EXCLUDED.steals,blocks=EXCLUDED.blocks,turnovers=EXCLUDED.turnovers,
+          field_goals_made=EXCLUDED.field_goals_made,field_goals_attempted=EXCLUDED.field_goals_attempted,
+          free_throws_made=EXCLUDED.free_throws_made,free_throws_attempted=EXCLUDED.free_throws_attempted,
+          source='nba',raw_stats=EXCLUDED.raw_stats,updated_at=now()`,
+          [gameId,playerId,teamId,opponentId,Boolean(player.starter),min,numeric(st.points),numeric(st.reboundsTotal??st.rebounds),
+           numeric(st.assists),numeric(st.threePointersMade),numeric(st.steals),numeric(st.blocks),numeric(st.turnovers),
+           numeric(st.fieldGoalsMade),numeric(st.fieldGoalsAttempted),numeric(st.freeThrowsMade),numeric(st.freeThrowsAttempted),JSON.stringify(st)]);
+        written++;
+      }
+    }
+    if(written<10) throw new Error(`NBA boxscore only mapped ${written} player rows; refusing incomplete import`);
+    await client.query("COMMIT");
+  }catch(error){await client.query("ROLLBACK");throw error;}finally{client.release();}
+  return written;
+}
+
 async function espnCdnBoxscore(eventId: string) {
   const url = new URL("https://cdn.espn.com/core/nba/boxscore");
   url.searchParams.set("xhr", "1");
@@ -543,14 +629,23 @@ export async function GET(request: NextRequest) {
       existingLogs.rows.map((r:any) => [String(r.provider_game_id), Number(r.stat_count)])
     );
     const recentFinals = recentFinalEvents.filter(e => (statCounts.get(e.id) ?? 0) < 15);
+    let nbaSchedule:NbaScheduleGame[]=[];
+    try{nbaSchedule=await loadNbaSchedule();}catch(error){failures.push("NBA schedule unavailable: "+(error instanceof Error?error.message:String(error)));}
     const boxResults = await mapLimit(recentFinals, 3, async event => {
-      try {
-        const count = await importBoxscore(event, teamDb, gameDb);
-        if (count === 0) throw new Error("ESPN boxscore was found, but no player rows could be mapped to teams with valid minutes");
-        return { ok:true, count };
-      } catch (error) {
-        failures.push(`Game ${event.id}: ${error instanceof Error ? error.message : String(error)}`);
-        return { ok:false, count:0 };
+      const nbaGame=findNbaGame(event,nbaSchedule);
+      try{
+        if(!nbaGame) throw new Error("No matching NBA game ID in official schedule");
+        const count=await importNbaBoxscore(event,nbaGame,teamDb,gameDb);
+        return {ok:true,count};
+      }catch(nbaError){
+        try{
+          const count=await importBoxscore(event,teamDb,gameDb);
+          if(count===0) throw new Error("ESPN fallback returned no mapped player rows");
+          return {ok:true,count};
+        }catch(espnError){
+          failures.push(`Game ${event.id}: NBA: ${nbaError instanceof Error?nbaError.message:String(nbaError)} | ESPN fallback: ${espnError instanceof Error?espnError.message:String(espnError)}`);
+          return {ok:false,count:0};
+        }
       }
     });
     for (const result of boxResults) if (result.ok) {
@@ -614,10 +709,10 @@ export async function GET(request: NextRequest) {
           AND v.actual_value IS NOT NULL
       )
       INSERT INTO prop_results(game_id,player_id,market_id,actual_value,source)
-      SELECT a.game_id,a.player_id,m.id,a.actual_value,'espn'
+      SELECT a.game_id,a.player_id,m.id,a.actual_value,'nba'
       FROM actuals a JOIN prop_markets m ON m.market_key=a.market_key AND m.active=true
       ON CONFLICT(game_id,player_id,market_id) DO UPDATE
-      SET actual_value=EXCLUDED.actual_value,settled_at=now(),source='espn'
+      SET actual_value=EXCLUDED.actual_value,settled_at=now(),source='nba'
     `);
     await pool.query(`
       WITH latest_projections AS (
