@@ -126,3 +126,11 @@
 .threshold-indicator.active{color:var(--lime);border-color:#60764b;background:#a4d65b12}
 .book-edge.threshold-met strong{color:var(--lime)!important}
 .book-edge.threshold-met{border-right:2px solid var(--lime);padding-right:7px}
+
+/* Game state badges */
+.game-status-badge{display:inline-flex;align-items:center;gap:6px;width:max-content;margin-top:7px;padding:4px 8px;border-radius:5px;font-size:10px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;line-height:1}
+.game-status-live{color:#ff7777;background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.32)}
+.game-status-live i{width:6px;height:6px;border-radius:50%;background:#ff4d4d;animation:live-status-pulse 1.15s ease-in-out infinite}
+.game-status-final{color:#aab3c2;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.24)}
+@keyframes live-status-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{opacity:.35;box-shadow:0 0 0 4px rgba(239,68,68,0)}}
+@media(prefers-reduced-motion:reduce){.game-status-live i{animation:none}}
