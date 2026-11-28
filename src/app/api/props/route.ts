@@ -270,7 +270,7 @@ export async function POST() {
             const rawName = outcome.description ?? "";
             const playerId = (outcome.player_id ? playerMap.get(`id:${String(outcome.player_id).replace(/^nba:/,"")}`) : undefined)
               ?? playerMap.get(normalized(rawName));
-            if (!playerId) { if (rawName) unmatchedPlayerNames.add(normalized(rawName)); continue; }
+            if (!playerId) { if (rawName) unmatchedPlayerNames.add(rawName.trim()); continue; }
             const point = Number(outcome.point);
             if (!Number.isFinite(point)) continue;
             const key = `${playerId}|${point}`;
@@ -344,7 +344,7 @@ export async function POST() {
       WHERE id=$1
     `, [runId, outcomesReceived, rows.length, JSON.stringify({
       events_received: events.length, players_matched: playersMatched,
-      unmatched_players: unmatchedPlayers, unmatched_events: unmatchedEvents,
+      unmatched_players: unmatchedPlayers, unmatched_player_names: [...unmatchedPlayerNames].sort(), unmatched_events: unmatchedEvents,
       injury_reports_saved: injuryReportsSaved, injury_players_unmatched: injuryPlayersUnmatched,
       daily_limit: headers.get("x-daily-limit"), daily_remaining: headers.get("x-daily-remaining"),
       missing_markets: headers.get("x-propline-missing-markets")
