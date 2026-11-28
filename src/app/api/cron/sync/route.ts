@@ -339,7 +339,7 @@ async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gam
   const awayDb = teamDb.get(awayAbbr);
   if (!homeDb || !awayDb) throw new Error(`Unknown team for ${event.id}`);
 
-  const boxTeams = summary.boxscore?.players ?? [];
+  // boxTeams was extracted from either the Site API summary or CDN payload above.
   let written = 0;
   const client = await pool.connect();
   try {
