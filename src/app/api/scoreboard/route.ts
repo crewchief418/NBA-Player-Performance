@@ -24,16 +24,18 @@ export async function GET(request: NextRequest) {
         const status = event.status;
         const state = status?.type?.completed || status?.type?.state === "post" ? "final" : status?.type?.state === "in" ? "live" : "scheduled";
         let total: number | null = null;
+        let spread: number | null = null;
         try {
           const oddsResponse = await fetch(`https://sports.core.api.espn.com/v2/sports/basketball/leagues/nba/events/${event.id}/competitions/${event.id}/odds`, { next: { revalidate: 300 } });
           if (oddsResponse.ok) {
-            const odds = await oddsResponse.json() as { items?: Array<{ overUnder?: number; provider?: { priority?: number } }> };
+            const odds = await oddsResponse.json() as { items?: Array<{ overUnder?: number; spread?: number; provider?: { priority?: number } }> };
             const available = (odds.items ?? []).filter(item => typeof item.overUnder === "number");
             available.sort((a,b) => (a.provider?.priority ?? 999) - (b.provider?.priority ?? 999));
             total = available[0]?.overUnder ?? null;
+            spread = available[0]?.spread ?? null;
           }
         } catch { /* Odds may not be posted for every game. */ }
-        return { date: (event.date ?? "").slice(0,10), home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period, total };
+        return { date: (event.date ?? "").slice(0,10), home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period, total, spread };
       }));
       return games.filter((game): game is NonNullable<typeof game> => game !== null);
     } catch { return []; }
