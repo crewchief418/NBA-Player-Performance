@@ -12,7 +12,8 @@ type Projection = {
   steals: string; blocks: string; pra: string; pr: string; pa: string; ra: string;
   starter_probability?: string; depth_chart_rank?: string | null; depth_chart_position?: string | null; injury_status?: string; injury_designator?: string | null; injury_detail?: string; rest_days?: number;
 };
-type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };\ntype ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number };
+type GameGroup = { gameId: number; date: string; tipoff?: string | null; home: string; away: string; players: Projection[] };
+type ScoreboardGame = { date: string; home: string; away: string; state: "live" | "final" | "scheduled"; displayClock?: string; period?: number };
 type VegasLine = {
   player_id: number; game_id: number; full_name: string; game_date: string; home_team: string; away_team: string;
   market_name: string; line: string; over_odds: number | null; under_odds: number | null;
