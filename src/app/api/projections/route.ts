@@ -32,10 +32,18 @@ export async function GET() {
         WHERE g.season=2027 AND g.season_type='regular'
           AND g.game_date >= (now() AT TIME ZONE 'America/Denver')::date - 1
           AND (
-            -- Keep every matchup for the current Mountain-time date, including
-            -- games already live or final. Also retain yesterday's slate after
-            -- midnight if even one game from that date has not gone final.
-            g.game_date = (now() AT TIME ZONE 'America/Denver')::date
+            -- Keep the full slate (including live and already-final games) while any
+            -- matchup that day remains unfinished. Retain it after midnight too.
+            (
+              g.game_date = (now() AT TIME ZONE 'America/Denver')::date
+              AND EXISTS (
+                SELECT 1 FROM games unfinished
+                WHERE unfinished.season=2027
+                  AND unfinished.season_type='regular'
+                  AND unfinished.game_date=g.game_date
+                  AND unfinished.status NOT IN ('final','cancelled','postponed')
+              )
+            )
             OR (
               g.game_date = (now() AT TIME ZONE 'America/Denver')::date - 1
               AND EXISTS (
@@ -43,7 +51,7 @@ export async function GET() {
                 WHERE unfinished.season=2027
                   AND unfinished.season_type='regular'
                   AND unfinished.game_date=g.game_date
-                  AND unfinished.status <> 'final'
+                  AND unfinished.status NOT IN ('final','cancelled','postponed')
               )
             )
             OR (
