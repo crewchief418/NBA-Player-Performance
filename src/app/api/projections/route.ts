@@ -30,11 +30,25 @@ export async function GET() {
         SELECT g.id,g.game_date,g.scheduled_start,g.home_team_id,g.away_team_id
         FROM games g
         WHERE g.season=2027 AND g.season_type='regular'
-          AND g.game_date >= (now() AT TIME ZONE 'America/New_York')::date
+          AND g.game_date >= (now() AT TIME ZONE 'America/Denver')::date - 1
           AND (
-            g.game_date = (now() AT TIME ZONE 'America/New_York')::date
+            -- Keep every matchup for the current Mountain-time date, including
+            -- games already live or final. Also retain yesterday's slate after
+            -- midnight if even one game from that date has not gone final.
+            g.game_date = (now() AT TIME ZONE 'America/Denver')::date
             OR (
-              g.status IN ('scheduled','pre-game','pregame')
+              g.game_date = (now() AT TIME ZONE 'America/Denver')::date - 1
+              AND EXISTS (
+                SELECT 1 FROM games unfinished
+                WHERE unfinished.season=2027
+                  AND unfinished.season_type='regular'
+                  AND unfinished.game_date=g.game_date
+                  AND unfinished.status <> 'final'
+              )
+            )
+            OR (
+              g.game_date > (now() AT TIME ZONE 'America/Denver')::date
+              AND g.status IN ('scheduled','pre-game','pregame')
               AND (g.scheduled_start IS NULL OR g.scheduled_start > now())
             )
           )
