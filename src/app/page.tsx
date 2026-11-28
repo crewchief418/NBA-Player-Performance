@@ -318,7 +318,7 @@ export default function Home() {
           <span className="game-toggle-indicator" aria-hidden="true">{expandedGames[game.gameId] ? "−" : "+"}</span>
         </button>
         {expandedGames[game.gameId] && <div className="player-list">{game.players.some(p=>p.injury_designator) && <div className="game-injury-report"><div className="game-injury-title">INJURY REPORT <span>{game.players.filter(p=>p.injury_designator).length} LISTED</span></div><div className="game-injury-items">{game.players.filter(p=>p.injury_designator).sort((a,b)=>String(a.injury_designator).localeCompare(String(b.injury_designator)) || a.full_name.localeCompare(b.full_name)).map(p=><span key={p.player_id}><b className={`injury-tag injury-${p.injury_designator?.toLowerCase()}`}>{p.injury_designator}</b>{p.full_name} <small>{p.injury_status}</small></span>)}</div></div>} {game.players.sort((a,b)=>Number(b.avg_minutes)-Number(a.avg_minutes) || Number(b.points)-Number(a.points) || a.full_name.localeCompare(b.full_name)).map(player=><PlayerCard key={player.player_id} player={player} vegasLines={vegasLines}/>)}</div>}
-      </section>)}</div>
+      </section>})}</div>
       : <div className="empty-state"><div className="empty-ball">◎</div><h3>{rows.length ? "No players match that search" : "The next slate is loading"}</h3><p>{rows.length ? "Try a different player name or clear your search." : "Player forecasts will appear here when upcoming games and recent player logs are available."}</p></div>}
     </section>
     <footer className="site-footer"><span>COURTSIDE <b>PLAYER PERFORMANCE MODEL</b></span><span>INDEPENDENT FORECASTS · BUILT ON PLAYER HISTORY</span></footer>
