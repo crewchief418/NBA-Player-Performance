@@ -287,7 +287,7 @@ type NbaScheduleGame = {gameId:string;gameDateUTC?:string;gameDate?:string;homeT
 async function loadNbaSchedule(): Promise<NbaScheduleGame[]> {
   const payload = await nbaJson("https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json");
   const games = (payload?.leagueSchedule?.gameDates ?? []).flatMap((d:any)=>Array.isArray(d.games)?d.games:[]);
-  const valid = games.filter((g:any)=>/^\\d{10}$/.test(String(g.gameId??"")));
+  const valid = games.filter((g:any)=>/^\d{10}$/.test(String(g.gameId??"")));
   if (!valid.length) throw new Error("NBA official schedule returned no games");
   return valid;
 }
@@ -304,7 +304,7 @@ function findNbaGame(event:EspnEvent,schedule:NbaScheduleGame[]) {
 function nbaMinutes(value:unknown):number|null {
   if(value===null||value===undefined||value==="") return null;
   const s=String(displayValue(value)??value).trim();
-  const m=s.match(/^PT(?:(\\d+)M)?(?:(\\d+(?:\\.\\d+)?)S)?$/i);
+  const m=s.match(/^PT(?:(\d+)M)?(?:(\d+(?:\\.\d+)?)S)?$/i);
   if(m){const n=Number(m[1]??0)+Number(m[2]??0)/60;return n>0&&Number.isFinite(n)?n:null;}
   return minutes(s);
 }
@@ -329,7 +329,7 @@ async function importNbaBoxscore(event:EspnEvent,nbaGame:NbaScheduleGame,teamDb:
         const nbaId=String(player.personId??player.playerId??"");
         if(min===null||!nbaId) continue;
         const name=String(player.name??[player.firstName,player.familyName].filter(Boolean).join(" ")??"Unknown").trim();
-        const first=player.firstName??name.split(/\\s+/)[0]??null, last=player.familyName??name.split(/\\s+/).slice(1).join(" ")??null;
+        const first=player.firstName??name.split(/\s+/)[0]??null, last=player.familyName??name.split(/\s+/).slice(1).join(" ")??null;
         const found=await client.query(`SELECT id FROM players WHERE metadata->>'nba_player_id'=$1 OR (provider='espn' AND lower(full_name)=lower($2)) ORDER BY CASE WHEN metadata->>'nba_player_id'=$1 THEN 0 ELSE 1 END LIMIT 1`,[nbaId,name]);
         let playerId:number;
         if(found.rowCount){
@@ -696,7 +696,7 @@ export async function GET(request: NextRequest) {
     // Settle saved forecasts against ESPN box scores so real model performance is tracked.
     await pool.query(`
       WITH actuals AS (
-        SELECT pgs.game_id,pgs.player_id,v.market_key,v.actual_value
+        SELECT pgs.game_id,pgs.player_id,pgs.source,v.market_key,v.actual_value
         FROM player_game_stats pgs
         JOIN games g ON g.id=pgs.game_id
         CROSS JOIN LATERAL (VALUES
@@ -709,10 +709,10 @@ export async function GET(request: NextRequest) {
           AND v.actual_value IS NOT NULL
       )
       INSERT INTO prop_results(game_id,player_id,market_id,actual_value,source)
-      SELECT a.game_id,a.player_id,m.id,a.actual_value,'nba'
+      SELECT a.game_id,a.player_id,m.id,a.actual_value,a.source
       FROM actuals a JOIN prop_markets m ON m.market_key=a.market_key AND m.active=true
       ON CONFLICT(game_id,player_id,market_id) DO UPDATE
-      SET actual_value=EXCLUDED.actual_value,settled_at=now(),source='nba'
+      SET actual_value=EXCLUDED.actual_value,settled_at=now(),source=EXCLUDED.source
     `);
     await pool.query(`
       WITH latest_projections AS (
