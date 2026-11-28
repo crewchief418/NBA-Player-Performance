@@ -134,3 +134,7 @@
 .game-status-final{color:#aab3c2;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.24)}
 @keyframes live-status-pulse{0%,100%{opacity:1;box-shadow:0 0 0 0 rgba(239,68,68,.45)}50%{opacity:.35;box-shadow:0 0 0 4px rgba(239,68,68,0)}}
 @media(prefers-reduced-motion:reduce){.game-status-live i{animation:none}}
+
+.game-total{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:7px 11px;border:1px solid var(--border,rgba(148,163,184,.2));border-radius:9px;background:rgba(148,163,184,.06);min-width:76px}
+.game-total span{font-size:8px;font-weight:800;letter-spacing:.09em;color:var(--muted,#94a3b8);white-space:nowrap}
+.game-total strong{font-size:16px;font-weight:850;font-variant-numeric:tabular-nums;color:var(--foreground,#f8fafc)}
