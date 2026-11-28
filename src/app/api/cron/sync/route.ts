@@ -330,7 +330,13 @@ async function importNbaBoxscore(event:EspnEvent,nbaGame:NbaScheduleGame,teamDb:
         if(min===null||!nbaId) continue;
         const name=String(player.name??[player.firstName,player.familyName].filter(Boolean).join(" ")??"Unknown").trim();
         const first=player.firstName??name.split(/\s+/)[0]??null, last=player.familyName??name.split(/\s+/).slice(1).join(" ")??null;
-        const found=await client.query(`SELECT id FROM players WHERE metadata->>'nba_player_id'=$1 OR (provider='espn' AND lower(full_name)=lower($2)) ORDER BY CASE WHEN metadata->>'nba_player_id'=$1 THEN 0 ELSE 1 END LIMIT 1`,[nbaId,name]);
+        const found=await client.query(`SELECT id FROM players
+          WHERE metadata->>'nba_player_id'=$1 OR
+            (provider='espn' AND regexp_replace(lower(full_name),'[^a-z0-9]','','g')=$2
+             AND (metadata->>'roster_team'=$3 OR metadata->>'roster_team' IS NULL))
+          ORDER BY CASE WHEN metadata->>'nba_player_id'=$1 THEN 0
+                        WHEN metadata->>'roster_team'=$3 THEN 1 ELSE 2 END
+          LIMIT 1`,[nbaId,name.toLowerCase().replace(/[^a-z0-9]/g,""),teamAbbr]);
         let playerId:number;
         if(found.rowCount){
           playerId=Number(found.rows[0].id);
@@ -339,7 +345,7 @@ async function importNbaBoxscore(event:EspnEvent,nbaGame:NbaScheduleGame,teamDb:
           const ins=await client.query(`INSERT INTO players(provider,provider_player_id,full_name,first_name,last_name,position,active,metadata)
             VALUES('nba',$1,$2,$3,$4,$5,true,$6::jsonb)
             ON CONFLICT(provider,provider_player_id) DO UPDATE SET full_name=EXCLUDED.full_name,updated_at=now() RETURNING id`,
-            [nbaId,name,first,last,player.position??null,JSON.stringify({nba_player_id:nbaId})]);
+            [nbaId,name,first,last,player.position?.abbreviation??player.position??null,JSON.stringify({nba_player_id:nbaId})]);
           playerId=Number(ins.rows[0].id);
         }
         await client.query(`INSERT INTO player_game_stats
