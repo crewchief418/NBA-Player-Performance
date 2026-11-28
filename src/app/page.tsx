@@ -55,12 +55,12 @@ function safeDate(value: string) {
 }
 function dateLabel(value: string, options: Intl.DateTimeFormatOptions) {
   const date = safeDate(value);
-  return date ? new Intl.DateTimeFormat("en-US", { timeZone:"America/New_York", ...options }).format(date) : "Date TBA";
+  return date ? new Intl.DateTimeFormat("en-US", { timeZone:"America/Denver", ...options }).format(date) : "Date TBA";
 }
 function tipoffLabel(value?: string | null) {
   if (!value) return "TIME TBA";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "TIME TBA" : new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/New_York"}).format(date);
+  return Number.isNaN(date.getTime()) ? "TIME TBA" : new Intl.DateTimeFormat("en-US",{hour:"numeric",minute:"2-digit",timeZone:"America/Denver"}).format(date);
 }
 function TeamMark({abbr,large=false}:{abbr:string;large?:boolean}) {
   const [failed,setFailed] = useState(false);
@@ -313,7 +313,7 @@ export default function Home() {
       {loading ? <div className="loading-state"><div className="loader"/>Building the player board…</div>
       : games.length ? <div className="game-list">{games.map(game=>{ const liveStatus=scoreboard.find(item=>item.date===game.date.slice(0,10) && item.home===game.home && item.away===game.away); const hasVegasProjection=typeof liveStatus?.total==="number" && typeof liveStatus?.spread==="number"; const awayImplied=hasVegasProjection ? (liveStatus!.total!+liveStatus!.spread!)/2 : null; const homeImplied=hasVegasProjection ? (liveStatus!.total!-liveStatus!.spread!)/2 : null; const formatVegasScore=(score:number)=>Number.isInteger(score)?String(score):score.toFixed(1); return <section className="game-card" key={game.gameId}>
         <button type="button" className="game-header game-header-toggle" onClick={()=>setExpandedGames(v=>({...v,[game.gameId]:!v[game.gameId]}))} aria-expanded={!!expandedGames[game.gameId]}>
-          <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} ET</span>{liveStatus?.state==="live" && <span className="game-status-badge game-status-live"><i/>Live</span>}{liveStatus?.state==="final" && <span className="game-status-badge game-status-final">Final</span>}</div>
+          <div className="game-date"><strong>{dateLabel(game.date,{weekday:"short",month:"short",day:"numeric"})}</strong><span>{tipoffLabel(game.tipoff)} MT</span>{liveStatus?.state==="live" && <span className="game-status-badge game-status-live"><i/>Live</span>}{liveStatus?.state==="final" && <span className="game-status-badge game-status-final">Final</span>}</div>
           <div className="matchup">
             <div className="team-side"><TeamMark abbr={game.away} large/><div><strong>{game.away}</strong><span>{teamNames[game.away] ?? game.away}</span>{awayImplied !== null && <small className="team-implied-score">{formatVegasScore(awayImplied)}</small>}</div></div>
             {hasVegasProjection ? <div className="matchup-vegas-total"><span>VEGAS TOTAL</span><strong>{liveStatus!.total!.toFixed(1)}</strong></div> : <span className="at-symbol">@</span>}
