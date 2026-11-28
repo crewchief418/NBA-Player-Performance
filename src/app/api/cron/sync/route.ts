@@ -338,6 +338,12 @@ async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gam
   const homeDb = teamDb.get(homeAbbr);
   const awayDb = teamDb.get(awayAbbr);
   if (!homeDb || !awayDb) throw new Error(`Unknown team for ${event.id}`);
+  // CDN player-boxscore team objects sometimes contain only the ESPN team ID,
+  // not an abbreviation. Resolve both forms so those rows are not silently skipped.
+  const providerTeamIdToDb = new Map<string, number>([
+    [String(home.team_id), homeDb],
+    [String(away.team_id), awayDb]
+  ]);
 
   // boxTeams was extracted from either the Site API summary or CDN payload above.
   let written = 0;
@@ -346,20 +352,30 @@ async function importBoxscore(event: EspnEvent, teamDb: Map<string, number>, gam
     await client.query("BEGIN");
     for (const side of boxTeams) {
       const sideAbbr = CANON[String(side.team?.abbreviation ?? "")] ?? String(side.team?.abbreviation ?? "");
-      const teamId = teamDb.get(sideAbbr);
+      const providerTeamId = String(side.team?.id ?? side.id ?? "");
+      const teamId = teamDb.get(sideAbbr) ?? providerTeamIdToDb.get(providerTeamId);
       const opponentId = teamId === homeDb ? awayDb : homeDb;
       if (!teamId) continue;
-      for (const category of (side.statistics ?? [])) {
-        const labels: string[] = category.labels ?? category.keys ?? [];
-        for (const athleteRow of (category.athletes ?? [])) {
-          const athlete = athleteRow.athlete ?? {};
-          const playerProviderId = String(athlete.id ?? "");
-          if (!playerProviderId || athleteRow.didNotPlay || athleteRow.reason) continue;
+      const categories = Array.isArray(side.statistics) ? side.statistics
+        : Array.isArray(side.statistics?.categories) ? side.statistics.categories : [];
+      for (const category of categories) {
+        const labels: string[] = category.labels ?? category.keys ?? category.names ?? [];
+        const athleteRows = category.athletes ?? category.players ?? [];
+        for (const athleteRow of athleteRows) {
+          const athlete = athleteRow.athlete ?? athleteRow.player ?? {};
+          const playerProviderId = String(athlete.id ?? athleteRow.athleteId ?? "");
+          if (!playerProviderId || athleteRow.didNotPlay || athleteRow.reason || athleteRow.didNotPlayReason) continue;
           const stats: Record<string,string> = {};
-          (athleteRow.stats ?? []).forEach((value: unknown, i: number) => {
-            if (labels[i]) stats[String(labels[i]).toUpperCase()] = String(value);
-          });
-          const min = minutes(stats.MIN ?? stats.MINS);
+          if (Array.isArray(athleteRow.stats)) {
+            athleteRow.stats.forEach((value: unknown, i: number) => {
+              if (labels[i]) stats[String(labels[i]).toUpperCase()] = String(value);
+            });
+          } else if (athleteRow.stats && typeof athleteRow.stats === "object") {
+            for (const [key, value] of Object.entries(athleteRow.stats)) {
+              stats[String(key).toUpperCase()] = String(value);
+            }
+          }
+          const min = minutes(stats.MIN ?? stats.MINS ?? stats.MINUTES ?? athleteRow.minutes);
           if (min === null) continue;
           const playerName = athlete.fullName ?? athlete.displayName ?? "Unknown";
           const parts = String(playerName).trim().split(/\s+/);
@@ -509,7 +525,7 @@ export async function GET(request: NextRequest) {
     const boxResults = await mapLimit(recentFinals, 3, async event => {
       try {
         const count = await importBoxscore(event, teamDb, gameDb);
-        if (count === 0) throw new Error("ESPN summary returned no player stat rows");
+        if (count === 0) throw new Error("ESPN boxscore was found, but no player rows could be mapped to teams with valid minutes");
         return { ok:true, count };
       } catch (error) {
         failures.push(`Game ${event.id}: ${error instanceof Error ? error.message : String(error)}`);
