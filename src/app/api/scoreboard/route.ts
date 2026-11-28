@@ -35,7 +35,14 @@ export async function GET(request: NextRequest) {
             spread = available[0]?.spread ?? null;
           }
         } catch { /* Odds may not be posted for every game. */ }
-        return { date: (event.date ?? "").slice(0,10), home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period, total, spread };
+        const eventDate = event.date ? new Date(event.date) : null;
+        const dateParts = eventDate && !Number.isNaN(eventDate.getTime())
+          ? new Intl.DateTimeFormat("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(eventDate)
+          : [];
+        const localDate = dateParts.length
+          ? `${dateParts.find(part => part.type === "year")?.value}-${dateParts.find(part => part.type === "month")?.value}-${dateParts.find(part => part.type === "day")?.value}`
+          : "";
+        return { date: localDate, home: normalize(home), away: normalize(away), state, displayClock: status?.displayClock, period: status?.period, total, spread };
       }));
       return games.filter((game): game is NonNullable<typeof game> => game !== null);
     } catch { return []; }
